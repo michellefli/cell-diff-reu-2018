@@ -1,0 +1,104 @@
+---
+title: "diffmap"
+author: "Michelle Li"
+date: "6/22/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+# Michelle Li
+# diffusion mapping using destiny 
+
+# v.1 June 22, 2018
+# Got destiny package working with Nestorowa data and paul data
+# Still need interactive 3D plot / how to add scale/numbers on axes? / need some help with where to put axes
+
+# requires destiny package (Github download), rgl for 3D plot
+library(destiny)
+library(Biobase)
+library(rgl)
+
+# read in data and convert to exp set (Nestorowa, non-.RData file)
+coordinates_gene_counts_flow_cytometry <- read.delim("~/Downloads/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
+rawdata <- coordinates_gene_counts_flow_cytometry
+cleandata <- na.omit(rawdata) # remove rows with NA
+data <- cleandata[,5:13] # choose relevant flow cytometry data
+dataES <- as.ExpressionSet(data) # convert to expression set
+
+# # load .RData file and convert to exp set
+# load("/Users/Michelle/Downloads/data_Paul_Cell2015/Paul_Cell_MARSseq_GSE72857.RData")
+# dataES <- ExpressionSet(data)
+
+RowSideColors
+hm <- heatmap(datamat, RowSideColors = )
+
+# create factor for grouping
+rownames <- row.names(data)
+groups <- as.character(rownames)
+groups[grepl("HSPC",groups)] <- "HSPC" # replace all labels with hspc
+groups[grepl("LT",groups)] <- "LT.HSC" # replace with lt.hsc
+groups[grepl("Prog",groups)] <- "PROG" # same for prog
+groupsf <- factor(groups)
+# groupsf <- factor(cluster.id) # paul data
+
+# normalization
+normalizations <- colMeans(exprs(dataES))
+normdata <- dataES
+exprs(normdata) <- exprs(normdata) - normalizations
+
+# choose colors
+# colors <- c("red","green","blue")
+colors <- rainbow(19)
+
+# diffusion map and plot using un-normalized data
+dm <- DiffusionMap(dataES)
+par(mar = c(5,5,5,7), xpd = "TRUE")
+plot(dm, col = colors[groupsf], pch=20, main = "Diffusion Map, Un-Normalized")
+legend("topright", inset=c(-0.2,-0.1), legend=levels(groupsf), col=colors,pch=20, ncol=3, cex=0.75)
+
+sigmas <- find_sigmas(dataES)
+plot(sigmas)
+
+# diffusion map and plot using normalized data
+dm1 <- DiffusionMap(normdata)
+par(mar = c(7,5,5,5), xpd = "TRUE")
+plot(dm1, col = colors[groupsf], pch = 20, main = "Diffusion Map, Normalized")
+legend("bottomright", inset=c(0,-0.3), legend=levels(groupsf), col=colors, pch=20, ncol=3, cex=0.5) # add legend
+
+sigmas1 <- find_sigmas(normdata)
+plot(sigmas1)
+
+
+```{r dm, echo=FALSE}
+plot(dm)
+```
+
+```{r dm, echo=FALSE}
+plot3d(dm)
+```
+
+
