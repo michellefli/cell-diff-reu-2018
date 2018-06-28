@@ -4,7 +4,7 @@
 # last updated: June 27, 2018
 # tried 2 PCA packages, working with Nestorowa and Paul data
 # added handwritten version
-
+# testtest
 
 #### PREPARING DATA ----------------------------------------------
 
@@ -56,7 +56,7 @@ U <- scale(U1, center=FALSE, scale=TRUE) # normalize U
 # eig: U (eig vectors of original covariance matrix) = M1centered * V (eig vectors of fake covariance matrix (Gram Matrix))
 # U from eig is a scale of the U from svd
 # unclear on the exact relationship between U from eig and U from svd
-
+#rest
 ## svd
 technique <- "svd"
 svd <- svd(M1centered)
