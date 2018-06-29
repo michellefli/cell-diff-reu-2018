@@ -1,11 +1,11 @@
 # Michelle Li
-# diffusion mapping using destiny 
+# diffusion mapping using destiny package
 
-# updated June 27, 2018
+# updated June 28, 2018
 # Got destiny package working with Nestorowa data and paul data
 # Added interactive 3D plot
 
-# requires destiny package (Github download), rgl for 3D plot
+# required packages
 library(destiny)
 library(Biobase)
 library(rgl)
@@ -13,21 +13,29 @@ library(rgl)
 
 #### PREPARING DATA ----------------------------------------------
 
-## read in data and convert to exp set (Nestorowa, non-.RData file)
-coordinates_gene_counts_flow_cytometry <- read.delim("~/Downloads/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
-rawdata <- coordinates_gene_counts_flow_cytometry
+## NOTES ON DATA:
+## nestorowa data: 1645 cells x 4290 genes (need transpose for diff mapping)
+## for Paul data: 8716 genes x 2730 cells
+## Grover data: 46175 genes x 135 cells
+
+## read in data and convert to matrix (Nestorowa, Grover, non-.RData file)
+# rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
+rawdata <- read.csv("~/GitHub/cell-diff-reu-2018/data/grover_expression.txt", row.names=1, sep="")
 cleandata <- na.omit(rawdata) # remove rows with NA
-data <- cleandata[,14:ncol(cleandata)] # choose relevant flow cytometry data
-dataES <- as.ExpressionSet(data) # convert to expression set
+# data <- cleandata[,14:ncol(cleandata)] # choose relevant flow cytometry data
+data <- cleandata
+data <- as.matrix(data)
 
-## load .RData file and convert to exp set
-load("/Users/Michelle/Downloads/data_Paul_Cell2015/Paul_Cell_MARSseq_GSE72857.RData")
-dataES <- ExpressionSet(data)
+## load .RData file 
+# load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
 
-## note on Expression Set: expression set is formatted so you have cells as the columns and genes as the rows
-## it seems that somehow it automatically knows which is which -- when you put in data as itself or its transpose, it comes out the same
+dataname <- "Grover Data" # set name
 
-dataname <- "Nestorowa Data (Gene Exp)" # set name
+## convert to expression set
+## NOTE ON EXPRESSION SET DIMENSIONS: 
+## cells = columns and genes = rows
+# data <- t(data) # may need to transpose to have correct rows/columns
+dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
 
 ## create factor for grouping
 rownames <- row.names(data)
@@ -60,18 +68,32 @@ dm1 <- DiffusionMap(normdata)
 par(mar = c(5,5,5,5), xpd = "TRUE")
 
 ## plot 2d
-plot(dm, col = colors[groupsf], pch=20, main = paste("Diffusion Map, Un-Normalized, ", dataname))
-plot(dm1, col = colors[groupsf], pch=20, main = paste("Diffusion Map, Normalized, ", dataname))
-legend("bottomright", inset=c(0,-0.2), legend=levels(groupsf), col=colors, pch=20, ncol=1, cex=0.75) 
+plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
+     xlab="DC1", ylab="DC2",
+     # col = colors[groupsf], 
+     pch=20, 
+     main = paste("Diffusion Map (destiny), Un-Normalized, ", dataname))
+legend("bottomright", inset=c(0,0), 
+       legend=levels(groupsf), 
+       col=colors, 
+       pch=20, 
+       ncol=3, cex=0.3) 
 
 ## plot 3d
-plot3d(eigenvectors(dm)[,1:3], col = colors[groupsf], pch=20, main = paste("Diffusion Map, Un-Normalized, ", dataname))
-plot3d(eigenvectors(dm1)[,1:3], col = colors[groupsf], pch=20, main = paste("Diffusion Map, Normalized, ", dataname))
-legend3d("topright", legend = levels(groupsf), inset=c(0.1,0.1), pch = 20, col = colors, ncol=1, cex=1)
+plot3d(eigenvectors(dm)[,1:3], 
+       # col = colors[groupsf], 
+       pch=20, 
+       main = paste("Diffusion Map (destiny), Un-Normalized, ", dataname))
+par3d(windowRect=c(0,0,1000,1000))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(groupsf),
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1)
 
 ## sigmas
-sigmas <- find_sigmas(dataES) # normalized
+sigmas <- find_sigmas(dataES) # unnormalized
 plot(sigmas)
-sigmas1 <- find_sigmas(normdata) # unnormalized 
+sigmas1 <- find_sigmas(normdata) # normalized 
 plot(sigmas1)
 

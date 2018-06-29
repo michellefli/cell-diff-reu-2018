@@ -14,15 +14,14 @@ library(rgl)
 #### PREPARING DATA ----------------------------------------------
 
 ## import data and convert into matrix
-coordinates_gene_counts_flow_cytometry <- read.delim("~/Downloads/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
-rawdata <- coordinates_gene_counts_flow_cytometry
+rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
+# rawdata <- read.csv("~/GitHub/cell-diff-reu-2018/data/grover_expression.txt", row.names=1, sep="")
 cleandata <- na.omit(rawdata) # remove NAs
 data <- cleandata[,14:ncol(cleandata)] # choose gene exp rows
-datamat <- as.matrix(data) # convert to matrix
-X <- datamat
+X <- as.matrix(data) # convert to matrix
 
-## load .RData 
-# load("/Users/Michelle/Downloads/data_Paul_Cell2015/Paul_Cell_MARSseq_GSE72857.RData")
+## load .RData (Paul)
+# load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData") # paul data
 # X <- data
 
 dataname <- "Nestorowa Data (Gene Exp)" # set name
@@ -53,10 +52,24 @@ ydata3d <- tsne(X, k=3, max_iter = 300)
 par(mar = c(5,5,5,5), xpd = "TRUE") 
 
 ## plot 2d
-plot(ydata, col = colors[groupsf], main = paste("2D t-SNE Plot of ", dataname), pch=20) 
-legend("topright", inset = c(0,0), legend = levels(groupsf), pch = 20, col = colors, cex=0.5) 
+plot(ydata, 
+     col = colors[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of ", dataname)) 
+legend("topright", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=3, cex=0.5) 
 
 ## plot 3d 
-plot3d(ydata3d, col=colors[groupsf], main = paste("3D t-SNE Plot of ", dataname))
-legend3d("topright", legend = levels(groupsf), inset=c(0.1,0.1), pch = 20, col = colors, ncol=1, cex=1)
+plot3d(ydata3d, 
+       col=colors[groupsf], 
+       pch=20,
+       main = paste("3D t-SNE Plot of ", dataname))
+legend3d("topright", inset=c(0.1,0.1),
+         legend = levels(groupsf),  
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1)
 

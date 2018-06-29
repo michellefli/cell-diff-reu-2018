@@ -10,27 +10,30 @@ library(rgl)
 
 #### PREPARING DATA ----------------------------------------------
 
+## NOTES ON DATA:
+## nestorowa data: 1645 cells x 4290 genes (need transpose for PCA)
+## for Paul data: 8716 genes x 2730 cells
+## Grover data: 46175 genes x 135 cells
+
 ## IMPORTANT NOTE ON DIMENSIONS FOR YOUR DATA MATRIX:
 ## whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
 ## e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
-## nestorowa data: 1645 cells, 4290 genes. 1645 x 4290. want to use transpose
-## for Paul data: use regular data matrix (genes x cells) 
 
-## read in data (Nestorowa, .txt file)
-coordinates_gene_counts_flow_cytometry <- read.delim("~/Downloads/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
-rawdata <- coordinates_gene_counts_flow_cytometry
+## read in data and convert to matrix (Nestorowa, Grover, non-.RData file)
+rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
+# rawdata <- read.csv("~/GitHub/cell-diff-reu-2018/data/grover_expression.txt", row.names=1, sep="")
 cleandata <- na.omit(rawdata) # remove rows with NA
-data <- cleandata[,14:ncol(cleandata)] # choose relevant data
+data <- cleandata[,14:ncol(cleandata)] # choose relevant flow cytometry data
+data <- cleandata
 data <- as.matrix(data)
 
 ## load data (Paul, .RData file)
-load("/Users/Michelle/Downloads/data_Paul_Cell2015/Paul_Cell_MARSseq_GSE72857.RData")
-
-dataname <- "Nestorowa Data" # enter title of data
+load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
 
 ## refer to above to choose whether you need to transpose your data or not
-X <- data
-# X <- t(data) # may need to take transpose
+# data <- t(data) # may need to take transpose
+
+dataname <- "Paul Data" # enter title of data
 
 ## create factor for grouping
 # rownames <- row.names(data)
@@ -48,7 +51,7 @@ colors <- rainbow(nclusters) # choose colors
 ################### Handwritten PCA ##########################
 
 ## center data
-M1centered <- scale(X, center=TRUE, scale=FALSE) # subtracts column means from each column
+M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 
 #### EIG/SVD ------------------------------------------------
@@ -80,7 +83,7 @@ par(mar = c(5,5,5,5), xpd = "TRUE") # add extra space to margins for legend
 ## plot scores 2d
 plot(x=scores[,1], y=scores[,2], 
      xlab="PC1 scores", ylab="PC2 scores", 
-     col = colors[groupsf], 
+     # col = colors[groupsf], 
      pch=20, 
      main = paste("PCA Scores (Handwritten),", dataname))
 legend("bottomright", inset = c(0,0), 
@@ -92,7 +95,7 @@ legend("bottomright", inset = c(0,0),
 ## plot scores 3d
 plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
        xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
-       col = colors[groupsf], 
+       # col = colors[groupsf], 
        pch=20, 
        main = paste("PCA Scores (Handwritten),", dataname))
 par3d(windowRect=c(0,0,1000,1000))
@@ -105,7 +108,7 @@ legend3d("bottomright", inset=c(0.2,0.2),
 ## plot PCs 2d (eigenvectors of original covariance matrix)
 plot(x=U[,1], y=U[,2], 
      xlab="PC1", ylab="PC2", 
-     col = colors[groupsf], 
+     # col = colors[groupsf], 
      pch=20, 
      main = paste("PCA (Handwritten),", dataname))
 legend("bottomleft", inset = c(0,0), 
@@ -117,7 +120,7 @@ legend("bottomleft", inset = c(0,0),
 ## plot PCs 3d
 plot3d(x=U[,1], y=U[,2], z=U[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
-       col = colors[groupsf], 
+       # col = colors[groupsf], 
        pch=20, 
        main = paste("PCA (Handwritten),", dataname))
 par3d(windowRect=c(0,0,1000,1000))

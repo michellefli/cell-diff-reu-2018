@@ -1,0 +1,103 @@
+---
+title: "Paul Data: Dimension Reduction"
+author: "Michelle Li"
+date: "6/29/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(rgl)
+options(rgl.useNULL = TRUE)
+r3dDefaults$windowRect <- c(0,0,1000,1000)
+```
+
+## PCA (Handwritten)
+
+```{r pca-paul}
+# IMPORTANT NOTE ON DIMENSIONS:
+# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
+# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
+# nestorowa data: 1645 cells, 4290 genes. 1645 x 4290. want to use transpose
+# for Paul data: use regular data matrix (genes x cells)
+
+## load data 
+load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
+dataname <- "Paul Data" # enter title of data
+X <- data
+
+## create factor for grouping
+groupsf <- factor(cluster.id) # paul data
+nclusters <- nlevels(groupsf) # number of groups to cluster
+colors <- rainbow(nclusters) # choose colors
+
+## center data
+M1centered <- scale(X, center=TRUE, scale=FALSE) # subtracts column means from each column
+
+## svd
+svd <- svd(M1centered, nu=3, nv=0)
+U <- svd$u # dim: nrowx3
+
+## calculate scores
+scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
+```
+
+2D plot of scores  
+```{r plot2dscores-paul}
+plot(x=scores[,1], y=scores[,2], 
+     xlab="PC1 scores", ylab="PC2 scores", 
+     col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA Scores (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=3, cex=0.4)
+```
+
+3D plot of scores  
+```{r plot3dscores-paul}
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+       col = colors[groupsf], 
+       pch=20, 
+       main = paste("PCA Scores (Handwritten),", dataname))
+legend3d("bottomright", inset=c(0.2,0.2),
+         legend = levels(groupsf), 
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1)
+rglwidget()
+```
+
+2D plot of PCs (eigenvectors of actual cov matrix)  
+```{r plot2dpcs-paul}
+## plot PCs 2d (eigenvectors of original covariance matrix)
+plot(x=U[,1], y=U[,2], 
+     xlab="PC1", ylab="PC2", 
+     col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA (Handwritten),", dataname))
+legend("bottomleft", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=3, cex=0.4)
+```
+
+3D plot of PCs (eigenvectors of actual cov matrix)  
+```{r plot3dpcs-paul}
+## plot PCs 3d
+plot3d(x=U[,1], y=U[,2], z=U[,3], 
+       xlab="PC1", ylab="PC2", zlab="PC3", 
+       col = colors[groupsf], 
+       pch=20, 
+       main = paste("PCA (Handwritten),", dataname))
+legend3d("bottomright", inset=c(0.2,0.2),
+         legend = levels(groupsf),
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1)
+rglwidget()
+```
