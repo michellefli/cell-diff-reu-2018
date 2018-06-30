@@ -1,7 +1,7 @@
 # Michelle Li
 # pca
 
-# last updated: June 28, 2018
+# last updated: June 29, 2018
 # tried 2 PCA packages, working with Nestorowa and Paul data
 # added handwritten version
 
@@ -10,9 +10,9 @@ library(rgl)
 
 #### PREPARING DATA ----------------------------------------------
 
-## NOTES ON DATA:
-## nestorowa data: 1645 cells x 4290 genes (need transpose for PCA)
-## for Paul data: 8716 genes x 2730 cells
+## NOTES ON OUR DATA:
+## Nestorowa data: 1645 cells x 4290 genes (need transpose for PCA)
+## Paul data: 8716 genes x 2730 cells
 ## Grover data: 46175 genes x 135 cells
 
 ## IMPORTANT NOTE ON DIMENSIONS FOR YOUR DATA MATRIX:
@@ -30,9 +30,6 @@ data <- as.matrix(data)
 ## load data (Paul, .RData file)
 load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
 
-## refer to above to choose whether you need to transpose your data or not
-# data <- t(data) # may need to take transpose
-
 dataname <- "Paul Data" # enter title of data
 
 ## create factor for grouping
@@ -49,6 +46,9 @@ colors <- rainbow(nclusters) # choose colors
 
 
 ################### Handwritten PCA ##########################
+
+## refer to above to choose whether you need to transpose your data or not
+# data <- t(data) # may need to take transpose
 
 ## center data
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column

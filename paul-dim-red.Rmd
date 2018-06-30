@@ -1,38 +1,53 @@
 ---
-title: "Paul Data: Dimension Reduction"
-author: "Michelle Li"
+title: "Paul Gene Expression Data: Dimension Reduction"
+author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
 date: "6/29/2018"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
+library(destiny)
+library(Biobase)
+library(tsne)
 library(rgl)
 options(rgl.useNULL = TRUE)
 r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```
 
+```{r load-paul, include=FALSE}
+## load .Rdata file into environment so you have all calculations done
+## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
+load("~/GitHub/cell-diff-reu-2018/paul-rmd-data.RData")
+```
+
+----
+
+Analyzing Paul gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Paul data comes in as 8716 genes x 2730 cells.  
+
 ## PCA (Handwritten)
 
-```{r pca-paul}
-# IMPORTANT NOTE ON DIMENSIONS:
-# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
-# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
-# nestorowa data: 1645 cells, 4290 genes. 1645 x 4290. want to use transpose
-# for Paul data: use regular data matrix (genes x cells)
-
+```{r pca-paul, eval=FALSE, include=FALSE}
 ## load data 
 load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
-dataname <- "Paul Data" # enter title of data
-X <- data
+dataname <- "Paul Gene Expression Data" # enter title of data
 
 ## create factor for grouping
 groupsf <- factor(cluster.id) # paul data
 nclusters <- nlevels(groupsf) # number of groups to cluster
 colors <- rainbow(nclusters) # choose colors
 
+gclusters <- nlevels(info.genes)
+gcolors <- rainbow(gclusters)
+
+# IMPORTANT NOTE ON DIMENSIONS:
+# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
+# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
+# nestorowa data: 1645 cells, 4290 genes. 1645 x 4290. want to use transpose
+# for Paul data: use regular data matrix (genes x cells)
+
 ## center data
-M1centered <- scale(X, center=TRUE, scale=FALSE) # subtracts column means from each column
+M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
 svd <- svd(M1centered, nu=3, nv=0)
@@ -42,8 +57,11 @@ U <- svd$u # dim: nrowx3
 scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
 ```
 
+#### Plots of scores 
+Scores were calculated by doing: scores = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
+
 2D plot of scores  
-```{r plot2dscores-paul}
+```{r pca-plot2dscores}
 plot(x=scores[,1], y=scores[,2], 
      xlab="PC1 scores", ylab="PC2 scores", 
      col = colors[groupsf], 
@@ -57,47 +75,147 @@ legend("bottomright", inset = c(0,0),
 ```
 
 3D plot of scores  
-```{r plot3dscores-paul}
+```{r pca-plot3dscores}
 plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
        xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
        col = colors[groupsf], 
        pch=20, 
        main = paste("PCA Scores (Handwritten),", dataname))
-legend3d("bottomright", inset=c(0.2,0.2),
+legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf), 
          pch = 20, 
          col = colors, 
-         ncol=3, cex=1)
+         ncol=3, cex=1.5)
 rglwidget()
 ```
 
-2D plot of PCs (eigenvectors of actual cov matrix)  
-```{r plot2dpcs-paul}
+#### Plots of principal components
+
+2D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot2dpcs}
 ## plot PCs 2d (eigenvectors of original covariance matrix)
 plot(x=U[,1], y=U[,2], 
      xlab="PC1", ylab="PC2", 
      col = colors[groupsf], 
      pch=20, 
      main = paste("PCA (Handwritten),", dataname))
-legend("bottomleft", inset = c(0,0), 
-       legend = levels(groupsf), 
-       pch = 20, 
-       col = colors, 
+legend("bottomleft", inset = c(0,0),
+       legend = levels(groupsf),
+       pch = 20,
+       col = colors,
        ncol=3, cex=0.4)
 ```
 
-3D plot of PCs (eigenvectors of actual cov matrix)  
-```{r plot3dpcs-paul}
+3D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot3dpcs}
 ## plot PCs 3d
 plot3d(x=U[,1], y=U[,2], z=U[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
        col = colors[groupsf], 
        pch=20, 
        main = paste("PCA (Handwritten),", dataname))
-legend3d("bottomright", inset=c(0.2,0.2),
+legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 
          col = colors, 
-         ncol=3, cex=1)
+         ncol=3, cex=1.5)
 rglwidget()
 ```
+
+----
+
+## Diffusion Mapping (destiny)
+
+Diffusion mapping using destiny package.  
+```{r diffmap-paul, eval=FALSE, include=FALSE}
+## previously read in data and converted to matrix 
+## convert to expression set
+## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Paul does NOT need to transpose data
+dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
+
+## diffusion map (un-normalized data)
+dm <- DiffusionMap(dataES)
+
+## sigmas
+sigmas <- find_sigmas(dataES) 
+```
+
+2D Diffusion Map  
+```{r diffmap-plot2d}
+## plot 2d
+plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
+     xlab="DC1", ylab="DC2",
+     col = colors[groupsf],
+     pch=20, 
+     main = paste("Diffusion Map (destiny),", dataname))
+legend("bottomright", inset=c(0,0), 
+       legend=levels(groupsf), 
+       col=colors, 
+       pch=20, 
+       ncol=3, cex=0.3) 
+```
+
+3D Diffusion Map  
+```{r diffmap-plot3d}
+## plot 3d
+plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
+       xlab="DC1", ylab="DC2", zlab="DC3",
+       col = colors[groupsf],
+       pch=20, 
+       main = paste("Diffusion Map (destiny) of", dataname))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(groupsf),
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1.5)
+rglwidget()
+```
+
+Sigmas  
+```{r diffmap-sigmas}
+plot(sigmas)
+```
+
+----
+
+## t-SNE (tsne package)
+
+t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
+
+```{r tsne-paul, eval=FALSE, include=FALSE}
+## already read in data and converted to matrix
+# Note: can take very, very long with large datasets, such as Paul
+# t-SNE DIMENSIONS: rows=cells, columns=genes
+data <- t(data) # Paul data needs transpose to have correct dimensions
+
+ydata3d <- tsne(data, k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n) 
+```
+
+2D t-SNE plot  
+```{r tsne-plot2d}
+plot(x=ydata3d[,1], y=ydata3d[,2], 
+     col = colors[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of", dataname)) 
+legend("bottomleft", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=3, cex=0.3) 
+```
+
+3D t-SNE plot  
+```{r tsne-plot3d}
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       col=colors[groupsf], 
+       pch=20,
+       main = paste("3D t-SNE Plot of", dataname))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(groupsf),  
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1.5)
+rglwidget()
+```
+
