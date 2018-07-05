@@ -1,10 +1,9 @@
 # Michelle Li
 # t-SNE code from van der Maaten/jdonaldson
 
-# last updated: June 29, 2018 
-# ran Nestorowa flow cytometry and gene exp
-# ran Paul data, takes forever, very poor plot
-# what formatting is required for t-SNE dataset?
+# last updated: July 1, 2018
+# successfully ran Nestorowa and Paul data, but not Grover data
+# added option to select cluster(s) to highlight in tsne plots
 
 # load required packages: tsne (can download from CRAN) and rgl for 3D plot
 library(tsne)
@@ -82,4 +81,24 @@ legend3d("topright", inset=c(0.1,0.1),
          pch = 20, 
          col = colors, 
          ncol=3, cex=1)
+
+
+## select cluster(s) to highlight 
+clusterindex <- 10 # select index of the cluster you want to visualize
+color1 <- colors
+color1[-clusterindex] <- "black"
+
+## plot 2d select clusters
+plot(x=ydata3d[,1], y=ydata3d[,2], 
+     col = color1[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)")) 
+
+## plot 3d select clusters
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       col = color1[groupsf],
+       pch=20,
+       main = paste("3D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)"))
+
+
 

@@ -1,7 +1,7 @@
 ---
 title: "Paul Gene Expression Data: Dimension Reduction"
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "6/29/2018"
+date: "7/2/2018"
 output: html_document
 ---
 
@@ -23,7 +23,7 @@ load("~/GitHub/cell-diff-reu-2018/paul-rmd-data.RData")
 
 ----
 
-Analyzing Paul gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Paul data comes in as 8716 genes x 2730 cells.  
+Analyzing Paul gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Paul data comes in as a matrix of 8716 genes x 2730 cells.  
 
 ## PCA (Handwritten)
 
@@ -43,30 +43,32 @@ gcolors <- rainbow(gclusters)
 # IMPORTANT NOTE ON DIMENSIONS:
 # whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
 # e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
-# nestorowa data: 1645 cells, 4290 genes. 1645 x 4290. want to use transpose
 # for Paul data: use regular data matrix (genes x cells)
 
 ## center data
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=0)
+svd <- svd(M1centered, nu=3, nv=3)
 U <- svd$u # dim: nrowx3
+V <- svd$v 
+# Note: U = M1centered %*% V %*% S^-1
 
-## calculate scores
-scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
+## calculate weights
+weights <- t(M1centered) %*% U # columns of weights are weights, dim: ncolx3
+scores <- M1centered %*% V # basically U 
 ```
 
-#### Plots of scores 
-Scores were calculated by doing: scores = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
+#### Plots of weights 
+Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
 
-2D plot of scores  
-```{r pca-plot2dscores}
-plot(x=scores[,1], y=scores[,2], 
-     xlab="PC1 scores", ylab="PC2 scores", 
+2D plot of weights   
+```{r pca-plot2dweights}
+plot(x=weights[,1], y=weights[,2], 
+     xlab="PC1 weights", ylab="PC2 weights", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA Scores (Handwritten),", dataname))
+     main = paste("PCA Weights (Handwritten),", dataname))
 legend("bottomright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
@@ -74,13 +76,13 @@ legend("bottomright", inset = c(0,0),
        ncol=3, cex=0.4)
 ```
 
-3D plot of scores  
-```{r pca-plot3dscores}
-plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
-       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+3D plot of weights 
+```{r pca-plot3dweights}
+plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
+       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA Scores (Handwritten),", dataname))
+       main = paste("PCA Weights (Handwritten),", dataname))
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf), 
          pch = 20, 
@@ -121,6 +123,26 @@ legend3d("bottomright", inset=c(0.1,0.1),
          ncol=3, cex=1.5)
 rglwidget()
 ```
+
+
+
+2D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot2dpcs-gradient}
+geneexp1 <- factor(data[,1])
+geneexp300 <- factor(data[,300])
+## plot PCs 2d (eigenvectors of original covariance matrix)
+plot(x=U[,1], y=U[,2], 
+     xlab="PC1", ylab="PC2", 
+     col = rainbow(nlevels(geneexp300))[geneexp300],
+     pch = 20, 
+     main = paste("PCA (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0),
+       legend = levels(geneexp2),
+       pch = 20,
+       col = colors,
+       ncol=3, cex=0.4)
+```
+
 
 ----
 
@@ -187,9 +209,9 @@ t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
 ## already read in data and converted to matrix
 # Note: can take very, very long with large datasets, such as Paul
 # t-SNE DIMENSIONS: rows=cells, columns=genes
-data <- t(data) # Paul data needs transpose to have correct dimensions
+# Paul data needs transpose to have correct dimensions
 
-ydata3d <- tsne(data, k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n) 
+ydata1 <- tsne(t(data), k=3, max_iter = 200, perplexity = 50) # ydata = matrix(rnorm(k * n),n) 
 ```
 
 2D t-SNE plot  
@@ -197,7 +219,7 @@ ydata3d <- tsne(data, k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n)
 plot(x=ydata3d[,1], y=ydata3d[,2], 
      col = colors[groupsf], 
      pch=20,
-     main = paste("2D t-SNE Plot of", dataname)) 
+     main = paste("2D t-SNE Plot of", dataname, "(tsne)")) 
 legend("bottomleft", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
@@ -210,7 +232,7 @@ legend("bottomleft", inset = c(0,0),
 plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
        col=colors[groupsf], 
        pch=20,
-       main = paste("3D t-SNE Plot of", dataname))
+       main = paste("3D t-SNE Plot of", dataname, "(tsne)"))
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),  
          pch = 20, 
@@ -219,3 +241,33 @@ legend3d("bottomright", inset=c(0.1,0.1),
 rglwidget()
 ```
 
+
+2D t-SNE plot highlighting selected cluster
+
+ 
+```{r tsne-select}
+clusterindex <- 10 # select index of the cluster you want to visualize
+color1 <- colors
+color1[-clusterindex] <- "black"
+```
+
+```{r tsne-plot2d-select}
+plot(x=ydata3d[,1], y=ydata3d[,2], 
+     col = color1[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)")) 
+legend("bottomleft", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = color1, 
+       ncol=3, cex=0.3) 
+```
+
+3D t-SNE plot highlighting selected cluster  
+```{r tsne-plot3d}
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       col = color1[groupsf],
+       pch=20,
+       main = paste("3D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)"))
+rglwidget()
+```

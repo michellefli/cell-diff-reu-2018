@@ -1,7 +1,7 @@
 ---
 title: 'Nestorowa Gene Expression Data: Dimension Reduction'
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "6/29/2018"
+date: "7/2/2018"
 output:
   html_document: default
 ---
@@ -23,7 +23,7 @@ load("~/GitHub/cell-diff-reu-2018/nestorowa-rmd-data.RData")
 ```
 ----
 
-Analyzing Nestorowa gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Nestorowa data comes as 1645 cells x 4290 genes.  
+Analyzing Nestorowa gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Nestorowa data comes as a dataframe of 1645 cells x 4290 genes.  
 
 
 ## PCA (Handwritten)
@@ -41,9 +41,9 @@ dataname <- "Nestorowa Gene Expression Data"
 ## create factor for grouping
 rownames <- row.names(data)
 groups <- as.character(rownames)
-groups[grepl("HSPC",groups)] <- "HSPC" # replace all labels with hspc
-groups[grepl("LT",groups)] <- "LT.HSC" # replace with lt.hsc
-groups[grepl("Prog",groups)] <- "PROG" # same for prog
+groups <- gsub(".*HSPC.*", "HSPC", groups)
+groups <- gsub(".*LT.*", "LT.HSC", groups)
+groups <- gsub(".*Prog.*", "PROG", groups)
 groupsf <- factor(groups)
 nclusters <- nlevels(groupsf) # number of groups to cluster
 colors <- rainbow(nclusters) # choose colors
@@ -60,16 +60,16 @@ U <- svd$u # dim: nrowx3
 scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
 ```
 
-#### Plots of scores
-Scores were calculated by doing: scores = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD.  
+#### Plots of weights
+Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD.  
 
-2D plot of scores  
-```{r pca-plot2dscores}
-plot(x=scores[,1], y=scores[,2], 
-     xlab="PC1 scores", ylab="PC2 scores", 
+2D plot of weights  
+```{r pca-plot2dweights}
+plot(x=weights[,1], y=weights[,2], 
+     xlab="PC1 weights", ylab="PC2 weights", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA Scores (Handwritten),", dataname))
+     main = paste("PCA Weights (Handwritten),", dataname))
 legend("topright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
@@ -77,14 +77,14 @@ legend("topright", inset = c(0,0),
        ncol=1, cex=0.4)
 ```
 
-3D plot of scores  
-```{r pca-plot3dscores}
-## plot scores 3d
-plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
-       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+3D plot of weights  
+```{r pca-plot3dweights}
+## plot weights 3d
+plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
+       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA Scores (Handwritten),", dataname))
+       main = paste("PCA Weights (Handwritten),", dataname))
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 

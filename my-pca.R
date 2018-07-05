@@ -1,7 +1,7 @@
 # Michelle Li
 # pca
 
-# last updated: June 29, 2018
+# last updated: July 3, 2018
 # tried 2 PCA packages, working with Nestorowa and Paul data
 # added handwritten version
 
@@ -14,6 +14,7 @@ library(rgl)
 ## Nestorowa data: 1645 cells x 4290 genes (need transpose for PCA)
 ## Paul data: 8716 genes x 2730 cells
 ## Grover data: 46175 genes x 135 cells
+## Russ data: 12674 genes x 101 cells
 
 ## IMPORTANT NOTE ON DIMENSIONS FOR YOUR DATA MATRIX:
 ## whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
@@ -23,7 +24,7 @@ library(rgl)
 rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
 # rawdata <- read.csv("~/GitHub/cell-diff-reu-2018/data/grover_expression.txt", row.names=1, sep="")
 cleandata <- na.omit(rawdata) # remove rows with NA
-data <- cleandata[,14:ncol(cleandata)] # choose relevant flow cytometry data
+data <- cleandata[,14:ncol(cleandata)] # choose relevant gene exp data
 data <- cleandata
 data <- as.matrix(data)
 
@@ -45,6 +46,13 @@ nclusters <- nlevels(groupsf) # number of groups to cluster
 colors <- rainbow(nclusters) # choose colors
 
 
+## TOY DATA
+data <- matrix(c(1,2,3,2,4,6,4,8,12,3,6,9,5,10,15,6,12,18),
+               nrow=6, ncol=3) # rows>columns
+dataname <- "Toy Data"
+
+
+
 ################### Handwritten PCA ##########################
 
 ## refer to above to choose whether you need to transpose your data or not
@@ -56,57 +64,68 @@ M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means fro
 
 #### EIG/SVD ------------------------------------------------
 
+## testing covariance
+C <- cov(M1centered)
+eigC <- eigen(C)
+
+
+
 ## eig
-C <- cov(M1centered) # will return a cov matrix, ncol x ncol
-eig <- eigen(C) 
-V <- eig$vectors # V=columns are the eig vectors of Gram matrix
-V <- -V # by default, eig vectors in R point in the negative direction. Multiply by -1 to use the positive-pointing vector
-U1 <- M1centered %*% V # U: columns are the eig vectors of original covariance matrix
-U <- scale(U1, center=FALSE, scale=TRUE) # normalize U
+# C <- cov(M1centered) # will return a cov matrix, ncol x ncol
+# eig <- eigen(C) 
+# eigvalues <- eig$values[1:3]
+# V <- eig$vectors[,1:3] # V=columns are the eig vectors of Gram matrix
+# V <- -V # by default, eig vectors in R point in the negative direction. Multiply by -1 to use the positive-pointing vector
+# U1eig <- M1centered %*% V # U: columns are the eig vectors of original covariance matrix
+# Ueig <- scale(U1eig, center=FALSE, scale=TRUE) # normalize U
 
 # eig: U (eig vectors of original covariance matrix) = M1centered * V (eig vectors of fake covariance matrix (Gram Matrix))
 # U from eig is a scale of the U from svd
 # unclear on the exact relationship between U from eig and U from svd
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=0)
-U <- svd$u # dim: nrowx3
+svd <- svd(M1centered)
+Usvd <- svd$u # dim: nrowx3
+Ssvd <- svd$d
+Vsvd <- svd$v # dim: ncolx3
 
 ## Calculate PC scores
-scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
+weights <- t(M1centered) %*% Usvd # columns of scores are the principal components, dim: ncolx3
 
 
 #### PLOTTING -------------------------------------------------
 
 par(mar = c(5,5,5,5), xpd = "TRUE") # add extra space to margins for legend 
 
-## plot scores 2d
-plot(x=scores[,1], y=scores[,2], 
-     xlab="PC1 scores", ylab="PC2 scores", 
-     # col = colors[groupsf], 
+## plot weights 2d 
+plot(x=weights[,1], y=weights[,2], 
+     xlab="PC1 weights", ylab="PC2 weights", 
+     # col = colors[groupsf],
      pch=20, 
-     main = paste("PCA Scores (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0), 
-       legend = levels(groupsf), 
-       pch = 20, 
-       col = colors, 
-       ncol=3, cex=0.4)
+     main = paste("PCA Weights (Handwritten),", dataname))
+# legend("bottomright", inset = c(0,0), 
+#        legend = levels(groupsf), 
+#        pch = 20, 
+#        col = colors, 
+#        ncol=3, cex=0.4)
 
-## plot scores 3d
-plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
-       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+## plot weights 3d 
+plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
+       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
        # col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA Scores (Handwritten),", dataname))
+       main = paste("PCA Weights (Handwritten),", dataname))
 par3d(windowRect=c(0,0,1000,1000))
-legend3d("bottomright", inset=c(0.2,0.2), 
-         legend = levels(groupsf), 
-         pch = 20, 
-         col = colors, 
-         ncol=3, cex=1)
+# legend3d("bottomright", inset=c(0.2,0.2), 
+#          legend = levels(groupsf), 
+#          pch = 20, 
+#          col = colors, 
+#          ncol=3, cex=1)
+rglwidget()
+
 
 ## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
+plot(x=Usvd[,1], y=Usvd[,2], 
      xlab="PC1", ylab="PC2", 
      # col = colors[groupsf], 
      pch=20, 
@@ -118,7 +137,7 @@ legend("bottomleft", inset = c(0,0),
        ncol=3, cex=0.4)
 
 ## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
+plot3d(x=Usvd[,1], y=Usvd[,2], z=Usvd[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
        # col = colors[groupsf], 
        pch=20, 
@@ -129,6 +148,7 @@ legend3d("bottomright", inset=c(0.2,0.2),
          pch = 20, 
          col = colors, 
          ncol=3, cex=1)
+rglwidget()
 
 
 ################### PCA Packages #######################
@@ -137,18 +157,35 @@ legend3d("bottomright", inset=c(0.2,0.2),
 #### PCA with function prcomp, uses svd -----------------------
 
 ## do pca
-pca1 <- prcomp(X, scale = TRUE)
+pca1 <- prcomp(data, scale = TRUE)
 # pca1t <- prcomp(t(datamat), scale=TRUE)
-loadings1 <- pca1$rotation # columns are the eigenvectors
-scores1 <- pca1$x # PCs (scores)
+loadings1 <- pca1$rotation # columns are the eigenvectors ncol x ncol (# cells)
+x1 <- pca1$x # x = rotated data (centered and scaled if requested) %*% rotation matrix
 
-A <- loadings1%*%scores1
+A <- loadings1 %*% t(x1)
+B <- x1 %*% loadings1
 
 ## plot
 par(mar = c(5,5,5,5), xpd = "TRUE") # add extra space to margins for legend 
-plot(x=scores1[1,], y=scores1[2,], col = colors[groupsf], pch=20, main = paste("PCA (prcomp), ", dataname))
+plot(x=loadings1[,1], y=loadings1[,2], 
+     # col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA (prcomp), ", dataname))
 
-plot(x=A[,1], y=A[,2], col = colors[groupsf], pch=20, main = paste("PCA (prcomp), ", dataname))
+plot(x=x1[1,], y=x1[2,], 
+     # col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA (prcomp),", dataname))
+
+plot(x=A[,1], y=A[,2], 
+     # col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA (prcomp), ", dataname))
+
+plot(x=B[,1], y=B[,2], 
+     # col = colors[groupsf], 
+     pch=20, 
+     main = paste("PCA (prcomp), ", dataname))
 
 
 plot(x=loadings1[,1], y=loadings1[,2], col = colors[groupsf], pch=20, main = paste("PCA (prcomp), ", dataname))
@@ -161,13 +198,16 @@ legend("topright", inset=c(0,0), legend=levels(groupsf), col=colors,pch=20, ncol
 library(FactoMineR)
 
 # takes in a dataframe X with n rows (individuals) and p columns (numeric variables)
-X <- as.data.frame(X)
-pca2 <- PCA(X)
+data <- as.data.frame(t(data))
+pca2 <- PCA(data)
 coord <- pca2$ind$coord
 
 ## plot 2d
 plot(pca2, choix="ind")
-plot(x=coord[,1], y=coord[,2], habillage="ind", col.hab=colors[groupsf], label="none", legend=levels(groupsf), title=paste("2D PCA (FactoMineR), ", dataname))
+plot(x=coord[,1], y=coord[,2], habillage="ind", 
+     # col.hab=colors[groupsf], 
+     label="none",
+     title=paste("2D PCA (FactoMineR), ", dataname))
 legend("topright", inset = c(0,0), legend = levels(groupsf), pch = 20, col = colors, ncol=3, cex=0.6) # add legend
 
 ## plot 3d 

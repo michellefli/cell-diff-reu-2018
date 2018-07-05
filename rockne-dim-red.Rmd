@@ -1,0 +1,341 @@
+---
+title: "Rockne Gene Expression Data: Dimension Reduction"
+author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
+date: "7/5/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(destiny)
+library(Biobase)
+library(tsne)
+library(rgl)
+options(rgl.useNULL = TRUE)
+r3dDefaults$windowRect <- c(0,0,1000,1000)
+```
+
+```{r load-rockne, eval=FALSE, include=FALSE}
+## load .Rdata file into environment so you have all calculations done
+## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
+load("~/GitHub/cell-diff-reu-2018/russ-rmd-data.RData")
+```
+
+----
+
+Analyzing gene expression data from Russ using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original data comes in as a dataframe of 12764 genes x 101 cells. 
+
+## PCA (Handwritten)
+
+```{r prepare-data-russ, eval=FALSE, include=FALSE}
+## load data 
+rpkm_sorted_new <- read.delim("~/GitHub/cell-diff-reu-2018/data/rpkm_sorted_new.txt")
+dataname <- "Rockne Gene Expression Data" # enter title of data
+
+## change repeated gene names
+rpkm_sorted_new[,1] <- as.character(rpkm_sorted_new[,1])
+rpkm_sorted_new[5670,1] <- "BC002163-a"
+rpkm_sorted_new[6748,1] <- "BC002163-b"
+rpkm_sorted_new[6954,1] <- 'Gm5506-a'
+rpkm_sorted_new[7529,1] <- 'Gm5506-b'
+rpkm_sorted_new[1980,1] <- 'Gm5512-a'
+rpkm_sorted_new[11107,1] <- 'Gm5512-b'
+rpkm_sorted_new[4264,1] <- "Gm5643-a"
+rpkm_sorted_new[10594,1] <- "Gm5643-b"
+rpkm_sorted_new[6955,1] <- "Gm5801-a"
+rpkm_sorted_new[12492,1] <- "Gm5801-b"
+rpkm_sorted_new[1275,1] <- "Mir684-1-a"
+rpkm_sorted_new[2086,1] <- "Mir684-1-b"
+rpkm_sorted_new[2771,1] <- "Mir684-1-c"
+rpkm_sorted_new[3660,1] <- "Mir684-1-d"
+rpkm_sorted_new[4334,1] <- "Mir684-1-e"
+rpkm_sorted_new[5094,1] <- "Mir684-1-f"
+rpkm_sorted_new[5846,1] <- "Mir684-1-g"
+rpkm_sorted_new[7657,1] <- "Snord58b-a"
+rpkm_sorted_new[12703,1] <- "Snord58b-b"
+rpkm_sorted_new[3041,1] <- "Tff1-a"
+rpkm_sorted_new[8290,1] <- "Tff1-b"
+
+## make gene names row names
+row.names(rpkm_sorted_new) <- rpkm_sorted_new[,1]
+rpkm_sorted_new <- rpkm_sorted_new[,2:102]
+data <- as.matrix(rpkm_sorted_new)
+rm(rpkm_sorted_new)
+
+## create factor for grouping by health: sick/not sick/control
+cellnames <- colnames(data)
+healthgroups <- as.character(cellnames)
+healthgroups <- gsub(".*(CM.2684|CM.2690|CM.2708|CM.2731|CM.2718|CM.2719).*", "CM sick", healthgroups)
+healthgroups <- gsub(".*(CM.2685|CM.2686|CM.2709).*", "CM not sick", healthgroups)
+healthgroups <- gsub(".*CTL.*", "Control", healthgroups)
+healthgroups <- factor(healthgroups)
+healthcolors <- rainbow(nlevels(healthgroups))
+
+## create factor for grouping by mouse (16 mice)
+mousegroups <- as.character(cellnames)
+mousegroups <- gsub(".*CM.2684.*", "CM.2684", mousegroups)
+mousegroups <- gsub(".*CM.2685.*", "CM.2685", mousegroups)
+mousegroups <- gsub(".*CM.2686.*", "CM.2686", mousegroups)
+mousegroups <- gsub(".*CM.2690.*", "CM.2690", mousegroups)
+mousegroups <- gsub(".*CM.2708.*", "CM.2708", mousegroups)
+mousegroups <- gsub(".*CM.2709.*", "CM.2709", mousegroups)
+mousegroups <- gsub(".*CM.2731.*", "CM.2731", mousegroups)
+mousegroups <- gsub(".*CM.2718.*", "CM.2718", mousegroups)
+mousegroups <- gsub(".*CM.2719.*", "CM.2719", mousegroups)
+mousegroups <- gsub(".*CTL.2689.*", "CTL.2689", mousegroups)
+mousegroups <- gsub(".*CTL.2692.*", "CTL.2692", mousegroups)
+mousegroups <- gsub(".*CTL.2700.*", "CTL.2700", mousegroups)
+mousegroups <- gsub(".*CTL.2702.*", "CTL.2702", mousegroups)
+mousegroups <- gsub(".*CTL.2705.*", "CTL.2705", mousegroups)
+mousegroups <- gsub(".*CTL.2720.*", "CTL.2720", mousegroups)
+mousegroups <- gsub(".*CTL.2683.*", "CTL.2683", mousegroups)
+mousegroups <- factor(mousegroups)
+mousecolors <- rainbow(nlevels(mousegroups))
+
+## create factor for grouping by months after induction (0,1,2,3,4.5,5.5,6.5)
+timegroups <- as.character(cellnames)
+timegroups <- gsub(".*X1.*", "0 Months", timegroups)
+timegroups <- gsub(".*X2.*", "1 Month", timegroups)
+timegroups <- gsub(".*X3.*", "2 Months", timegroups)
+timegroups <- gsub(".*X4.*", "3 Months", timegroups)
+timegroups <- gsub(".*X5.*", "4.5 Months", timegroups)
+timegroups <- gsub(".*X6.*", "5.5 Months", timegroups)
+timegroups <- gsub(".*X7.*", "6.5 Months", timegroups)
+timegroups <- gsub(".*L.*", "Moribund", timegroups)
+timegroups <- factor(timegroups)
+timecolors <- rainbow(nlevels(timegroups))
+
+```
+
+```{r pca-rockne, eval=FALSE, include=FALSE}
+# IMPORTANT NOTE ON DIMENSIONS:
+# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
+# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
+# for Rockne data: use regular data matrix (genes x cells)
+
+## center data
+M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
+
+## svd
+svd <- svd(M1centered, nu=3, nv=3)
+U <- svd$u # dim: nrowx3
+V <- svd$v 
+# Note: U = M1centered %*% V %*% S^-1
+
+## calculate weights
+weights <- t(M1centered) %*% U # columns of weights are weights, dim: ncolx3
+scores <- M1centered %*% V # basically U 
+```
+
+#### Plots of weights 
+Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
+
+2D plot of weights   
+```{r pca-plot2dweights}
+plot(x=weights[,1], y=weights[,2], 
+     xlab="PC1 weights", ylab="PC2 weights", 
+     col = healthcolors[healthgroups], 
+     pch=20, 
+     main = paste("PCA Weights (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0), 
+       legend = levels(healthgroups), 
+       pch = 20, 
+       col = healthcolors, 
+       ncol=1, cex=0.4)
+```
+
+3D plot of weights 
+```{r pca-plot3dweights}
+plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
+       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
+       col = healthcolors[healthgroups], 
+       pch=20, 
+       main = paste("PCA Weights (Handwritten),", dataname))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(healthgroups), 
+         pch = 20, 
+         col = healthcolors, 
+         ncol=1, cex=1.5)
+rglwidget()
+```
+
+#### Plots of principal components
+
+2D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot2dpcs}
+## plot PCs 2d (eigenvectors of original covariance matrix)
+plot(x=U[,1], y=U[,2], 
+     xlab="PC1", ylab="PC2", 
+     col = healthcolors[healthgroups], 
+     pch=20, 
+     main = paste("PCA (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0),
+       legend = levels(healthgroups),
+       pch = 20,
+       col = healthcolors,
+       ncol=1, cex=0.4)
+```
+
+3D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot3dpcs}
+## plot PCs 3d
+plot3d(x=U[,1], y=U[,2], z=U[,3], 
+       xlab="PC1", ylab="PC2", zlab="PC3", 
+       col = healthcolors[healthgroups], 
+       pch=20, 
+       main = paste("PCA (Handwritten),", dataname))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(healthgroups),
+         pch = 20, 
+         col = healthcolors, 
+         ncol=1, cex=1.5)
+rglwidget()
+```
+
+
+
+2D plot of PCs (eigenvectors of actual covariance matrix)  
+```{r pca-plot2dpcs-gradient}
+geneexp1 <- factor(data[,1])
+geneexp300 <- factor(data[,300])
+## plot PCs 2d (eigenvectors of original covariance matrix)
+plot(x=U[,1], y=U[,2], 
+     xlab="PC1", ylab="PC2", 
+     col = rainbow(nlevels(geneexp300))[geneexp300],
+     pch = 20, 
+     main = paste("PCA (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0),
+       legend = levels(geneexp2),
+       pch = 20,
+       col = colors,
+       ncol=3, cex=0.4)
+```
+
+
+----
+
+## Diffusion Mapping (destiny)
+
+Diffusion mapping using destiny package.  
+```{r diffmap-rockne, eval=FALSE, include=FALSE}
+## previously read in data and converted to matrix 
+## convert to expression set
+## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Rockne does NOT need to transpose data
+dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
+
+## diffusion map (un-normalized data)
+dm <- DiffusionMap(dataES)
+
+## sigmas
+sigmas <- find_sigmas(dataES) 
+```
+
+2D Diffusion Map  
+```{r diffmap-plot2d}
+## plot 2d
+plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
+     xlab="DC1", ylab="DC2",
+     col = healthcolors[healthgroups],
+     pch=20, 
+     main = paste("Diffusion Map (destiny),", dataname))
+legend("bottomleft", inset=c(0,0), 
+       legend=levels(healthgroups), 
+       col=healthcolors, 
+       pch=20, 
+       ncol=1, cex=0.3) 
+```
+
+3D Diffusion Map  
+```{r diffmap-plot3d}
+## plot 3d
+plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
+       xlab="DC1", ylab="DC2", zlab="DC3",
+       col = healthcolors[healthgroups],
+       pch=20, 
+       main = paste("Diffusion Map (destiny) of", dataname))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(healthgroups),
+         pch = 20, 
+         col = healthcolors, 
+         ncol=1, cex=1.5)
+rglwidget()
+```
+
+Sigmas  
+```{r diffmap-sigmas}
+plot(sigmas)
+```
+
+----
+
+## t-SNE (tsne package)
+
+t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
+
+```{r tsne-rockne, eval=FALSE, include=FALSE}
+## already read in data and converted to matrix
+# Note: can take very, very long with large datasets, such as Paul
+# t-SNE DIMENSIONS: rows=cells, columns=genes
+# Paul data needs transpose to have correct dimensions
+
+ydata1 <- tsne(t(data), k=3, max_iter = 200, perplexity = 30) # ydata = matrix(rnorm(k * n),n) 
+```
+
+2D t-SNE plot  
+```{r tsne-plot2d}
+plot(x=ydata3d[,1], y=ydata3d[,2], 
+     col = colors[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of", dataname, "(tsne)")) 
+legend("bottomleft", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=3, cex=0.3) 
+```
+
+3D t-SNE plot  
+```{r tsne-plot3d}
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       col=colors[groupsf], 
+       pch=20,
+       main = paste("3D t-SNE Plot of", dataname, "(tsne)"))
+legend3d("bottomright", inset=c(0.1,0.1),
+         legend = levels(groupsf),  
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1.5)
+rglwidget()
+```
+
+
+2D t-SNE plot highlighting selected cluster
+
+ 
+```{r tsne-select}
+clusterindex <- 10 # select index of the cluster you want to visualize
+color1 <- colors
+color1[-clusterindex] <- "black"
+```
+
+```{r tsne-plot2d-select}
+plot(x=ydata3d[,1], y=ydata3d[,2], 
+     col = color1[groupsf], 
+     pch=20,
+     main = paste("2D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)")) 
+legend("bottomleft", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = color1, 
+       ncol=3, cex=0.3) 
+```
+
+3D t-SNE plot highlighting selected cluster  
+```{r tsne-plot3d}
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       col = color1[groupsf],
+       pch=20,
+       main = paste("3D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)"))
+rglwidget()
+```
