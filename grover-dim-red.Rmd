@@ -18,7 +18,7 @@ r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```{r load-grover, include=FALSE}
 ## load .Rdata file into environment so you have all calculations done
 ## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
-load("~/GitHub/cell-diff-reu-2018/grover-rmd-data.RData")
+load("./grover-rmd-data.RData")
 ```
 
 ----
@@ -32,7 +32,7 @@ This is the handwritten version of PCA in R, I used SVD for everything (not eig)
 
 ```{r pca-grover, eval=FALSE, include=FALSE}
 ## read in data, convert to matrix
-rawdata <- read.csv("~/GitHub/cell-diff-reu-2018/data/grover_expression.txt", row.names=1, sep="")
+rawdata <- read.csv("./data/grover_expression.txt", row.names=1, sep="")
 data <- as.matrix(rawdata)
 dataname <- "Grover Gene Expression Data"
 
