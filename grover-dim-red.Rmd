@@ -1,7 +1,7 @@
 ---
 title: "Grover Gene Expression Data: Dimension Reduction"
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "7/2/2018"
+date: "7/20/2018"
 output: html_document
 ---
 
@@ -16,7 +16,7 @@ r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```
 
 ```{r load-grover, include=FALSE}
-## load .Rdata file into environment so you have all calculations done
+## load .Rdata file into environment so you have all calculations done (located in our Drive)
 ## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
 load("./grover-rmd-data.RData")
 ```
@@ -25,18 +25,14 @@ load("./grover-rmd-data.RData")
 
 Analyzing Grover gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Grover data comes in as 46175 genes x 135 cells.  
 
+Grover looks at how changes in properties of stem cells relates to mammalian aging and physiological changes. They do single-cell analysis of hematopoeitic stem cells (HSCs) in young mice (2-3 months old) and old mice (20-25 months old).   
 
-## PCA (Handwritten)
-
-This is the handwritten version of PCA in R, I used SVD for everything (not eig).
-
-```{r pca-grover, eval=FALSE, include=FALSE}
+```{r prepare-grover, eval=FALSE, include=FALSE}
 ## read in data, convert to matrix
 rawdata <- read.csv("./data/grover_expression.txt", row.names=1, sep="")
 data <- as.matrix(rawdata)
-dataname <- "Grover Gene Expression Data"
 
-#### GROUPING
+## grouping
 cellnames <- as.character(colnames(data))
 celltypes <- c("A10_young","A11_young", "A3_young", "A4_young", "A5_young", "A7_young", "A9_young", "B11_young", "B12_young", "B1_young", "B2_young", "B3_young", "B5_young", "B7_young", "B8_young", "C11_young", "C12_young", "C1_young", "C3_young", "C4_young", "C5_young", "C6_young", "C7_young", "C8_young", "D1_young", "D3_young", "D6_young", "D7_young", "D8_young", "D9_young", "E11_young", "E1_young", "E2_young", "E3_young", "E6_young", "E7_young", "F10_young", "F1_young", "F2_young", "F3_young", "F5_young", "F6_young", "F8_young", "F9_young", "G11_young", "G12_young", "G1_young", "G2_young", "G3_young", "G4_young", "G5_young", "G6_young", "G7_young", "G8_young", "H11_young", "H12_young", "H3_young", "H4_young", "H5_young", "H6_young", "H8_young", "A10_old", "A11_old", "A12_old", "A1_old", "A2_old", "A4_old", "A5_old", "A6_old", "A7_old", "A8_old", "B10_old", "B11_old", "B2_old", "B3_old", "B4_old", "B5_old", "B6_old", "B7_old", "B9_old", "C10_old", "C11_old", "C12_old", "C1_old", "C3_old", "C4_old", "C5_old", "C6_old", "C7_old", "C8_old", "C9_old", "D11_old", "D12_old", "D1_old", "D4_old", "D6_old", "D7_old", "D8_old", "D9_old", "E10_old", "E11_old", "E12_old", "E1_old", "E3_old", "E5_old", "E7_old", "E8_old", "E9_old", "F10_old", "F12_old", "F1_old", "F3_old", "F4_old", "F5_old", "F7_old", "F8_old", "F9_old", "G10_old", "G12_old", "G1_old", "G2_old", "G3_old", "G5_old", "G6_old", "G9_old", "H11_old", "H12_old", "H1_old", "H2_old", "H4_old", "H5_old", "H6_old", "H7_old", "H8_old", "H9_old")
 
@@ -47,118 +43,115 @@ age[grepl("old",age)] <- "old"
 age <- factor(age)
 
 # color
-colors <- rainbow(2)
+colors <- c("limegreen", "deeppink1")
+```
 
-## center data
+```{r heatmap-grover, eval=FALSE, include=FALSE}
+hmap <- heatmap(data, Rowv=NA, Colv=NA)
+```
+
+
+## PCA (Handwritten)
+
+This is the handwritten version of PCA in R, I used SVD for everything (not eig).
+
+```{r pca-grover, eval=FALSE, include=FALSE}
+## PCA DIMENSIONS:
+## cells = rows, genes = columns 
+## for Grover data: use TRANSPOSE of data matrix (want cells x genes)
+data <- t(data)
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=0)
+svd <- svd(M1centered, nu=3, nv=3) # only first 3 left/right singular vectors for efficiency
 U <- svd$u # dim: nrowx3
+V <- svd$v # dim: ncolx3
+## Note: U = M1centered %*% V %*% S^-1
 
 ## calculate scores
-scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
-
+# weights <- t(M1centered) %*% U # dim: ncolx3
+scores <- M1centered %*% V # dim: nrowx3
 ```
 
-#### Plots of weights
 
-Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD.  
+#### Plots of scores
+Scores were calculated by: scores <- data %*% V. V are the right singular vectors from SVD whose columns contain the eigenvectors of the covariance matrix. Scores give the coordinates of the individuals on the principal components (coefficients of the linear combination of original variables for each principal component). 
 
-2D plot of weights  
-```{r pca-plot2dweights}
-plot(x=weights[,1], y=weights[,2], 
-     xlab="PC1 weights", ylab="PC2 weights", 
+2D plot of scores  
+```{r pca-plot2dscores}
+plot(x=scores[,1], y=scores[,2], 
+     xlab="PC1 scores", ylab="PC2 scores", 
      col = colors[age],
      pch=20, 
-     main = paste("PCA Weights (Handwritten),", dataname))
+     main = "PCA Scores, Grover")
 legend("topright", inset = c(0,0),
        legend = levels(age),
        pch = 20,
        col = colors,
-       ncol=1, cex=0.4)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
-3D plot of weights  
-```{r pca-plot3dweights}
-## plot weights 3d
-plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
-       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
+3D plot of scores  
+```{r pca-plot3dscores}
+## plot scores 3d
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
        col = colors[age],
        pch=20, 
-       main = paste("PCA Weights (Handwritten),", dataname))
+       main = "PCA Scores, Grover")
 legend3d("bottomright", inset=c(0.2,0.2),
          legend = levels(age),
          pch = 20,
          col = colors,
-         ncol=1, cex=1)
+         ncol=1, cex=1.5)
 rglwidget()
 ```
 
 #### Plots of principal components
-2D plot of PCs (eigenvectors of actual covariance matrix)  
+2D plot of PCs (eigenvectors of covariance matrix)  
 ```{r pca-plot2dpcs}
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
+## plot PCs 2d (eigenvectors of covariance matrix)
+plot(x=V[,1], y=V[,2], 
      xlab="PC1", ylab="PC2", 
      col = colors[age],
      pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
+     main = "Principal Components, Grover")
 legend("topright", inset = c(0,0),
        legend = levels(age),
        pch = 20,
        col = colors,
-       ncol=1,
-       cex=0.4)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
 2D plot of PCs (zoomed in)  
 ```{r pca-plot2dpcs-zoom}
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
+## plot PCs 2d (eigenvectors of covariance matrix)
+plot(x=V[,1], y=V[,2], 
      xlab="PC1", ylab="PC2", 
-     xlim = c(-1e-4,1e-3), ylim = c(-8e-4, 8e-4),
+     xlim = c(-1.5e-3, 1.5e-3), ylim = c(-.01, 5e-3),
      col = colors[age],
      pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("topright", inset = c(0,0),
+     main = "Principal Components, Grover")
+legend("bottomleft", inset = c(0,0),
        legend = levels(age),
        pch = 20,
        col = colors,
-       ncol=1,
-       cex=0.4)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
-3D plot of PCs (eigenvectors of actual covariance matrix)  
+3D plot of PCs (eigenvectors of covariance matrix)  
 ```{r pca-plot3d-pcs}
 ## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
+plot3d(x=V[,1], y=V[,2], z=V[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
        col = colors[age],
        pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
+       main = "Principal Components, Grover")
 legend3d("bottomright", inset=c(0.2,0.2),
          legend = levels(age),
          pch = 20,
          col = colors,
-         ncol=1, cex=1)
-rglwidget()
-```
-
-3D plot of PCs (zoomed in)  
-```{r pca-plot3d-pcs-zoom}
-## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
-       xlab="PC1", ylab="PC2", zlab="PC3", 
-       xlim = c(-1e-4, 1e-3), ylim = c(-8e-4, 8e-4), zlim= c(-1e-2, 1e-2),
-       col = colors[age],
-       pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
-legend3d("bottomright", inset=c(0.2,0.2),
-         legend = levels(age),
-         pch = 20,
-         col = colors,
-         ncol=1, cex=1)
+         ncol=1, cex=1.5)
 rglwidget()
 ```
 
@@ -168,13 +161,13 @@ rglwidget()
 
 Diffusion mapping using destiny package.  
 ```{r diffmap-grover, eval=FALSE, include=FALSE}
-## previously read in data and converted to matrix 
 ## convert to expression set
-## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
-## Grover does NOT need to transpose data
+## EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Grover needs original data format, need to take transpose again
+data <- t(data)
 dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
 
-## diffusion map (un-normalized data)
+## diffusion map
 dm <- DiffusionMap(dataES)
 
 ## sigmas
@@ -188,12 +181,12 @@ plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
      xlab="DC1", ylab="DC2",
      col = colors[age],
      pch=20, 
-     main = paste("Diffusion Map (destiny) of", dataname))
+     main = "Diffusion Map, Grover")
 legend("topright", inset=c(0,0),
        legend=levels(age),
        col=colors,
        pch=20,
-       ncol=1, cex=0.3)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
 3D Diffusion Map  
@@ -203,12 +196,12 @@ plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
        xlab="DC1", ylab="DC2", zlab="DC3",
        col = colors[age],
        pch=20, 
-       main = paste("Diffusion Map (destiny) of", dataname))
+       main = "Diffusion Map, Grover")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(age),
          pch = 20,
          col = colors,
-         ncol=1, cex=1)
+         ncol=1, cex=1.5)
 rglwidget()
 ```
 
@@ -221,41 +214,41 @@ plot(sigmas)
 
 ## t-SNE (tsne package)
 
-t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
+t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website). t-SNE is not working with Grover data in R. It requires far too much memory, we even tried it with supercomputers but it said it needs terabytes of memory. It seems that the destiny package does NOT use the Barnes-Hut approximation which would dramatically speed up t-SNE.
 
 ```{r tsne-grover, eval=FALSE, include=FALSE}
 ## already read in data and converted to matrix
-# Note: can take very, very long with large datasets
+# can take very, very long 
 # t-SNE DIMENSIONS: rows=cells, columns=genes
 # Grover data needs transpose to have correct dimensions
-
-ydata3d <- tsne(t(data), k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n)
+data <- t(data)
+ydata3d <- tsne(data, k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n)
 ```
 
-2D t-SNE plot  
 ```{r tsne-plot2d, eval=FALSE, include=FALSE}
+# 2d t-SNE plot
 plot(x=ydata3d[,1], y=ydata3d[,2], 
      col = colors[groupsf], 
      pch=20,
-     main = paste("2D t-SNE Plot of", dataname, "(tsne)")) 
+     main = "t-SNE, Grover") 
 legend("topright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=3, cex=0.5) 
+       ncol=3, cex=0.6, pt.cex=1) 
 ```
-
-3D t-SNE plot  
+  
 ```{r tsne-plot3d, eval=FALSE, include=FALSE}
+# 3d t-SNE plot 
 plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
        col=colors[groupsf], 
        pch=20,
-       main = paste("3D t-SNE Plot of", dataname, "(tsne)"))
+       main = "t-SNE, Grover")
 legend3d("topright", inset=c(0.1,0.1),
          legend = levels(groupsf),  
          pch = 20, 
          col = colors, 
-         ncol=3, cex=1)
+         ncol=3, cex=1.5)
 rglwidget()
 ```
 

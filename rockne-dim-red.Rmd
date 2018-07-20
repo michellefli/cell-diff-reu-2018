@@ -1,7 +1,7 @@
 ---
 title: "Rockne Gene Expression Data: Dimension Reduction"
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "7/5/2018"
+date: "7/20/2018"
 output: html_document
 ---
 
@@ -16,23 +16,22 @@ r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```
 
 ```{r load-rockne, eval=FALSE, include=FALSE}
-## load .Rdata file into environment so you have all calculations done
+## load .Rdata file into environment so you have all calculations done (located in our Drive)
 ## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
-load("~/GitHub/cell-diff-reu-2018/russ-rmd-data.RData")
+load("~/GitHub/cell-diff-reu-2018/rockne-rmd-data.RData")
 ```
 
 ----
 
-Analyzing gene expression data from Russ using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original data comes in as a dataframe of 12764 genes x 101 cells. 
+Analyzing gene expression data from Russ Rockne using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original data comes in as a dataframe of 12764 genes x 101 cells.  
 
-## PCA (Handwritten)
+The Rockne paper looks at inv(16) driven actue myeloid leukemia, a disease of the bone marrow characterized by gene mutations and chromosomal abnormalities. Rockne aims to understand the continual change of gene expression as a whole over the course of cancer progression. It is time series data, with 9 CM knock-in mice and 7 control mice lacking the transgene. Measurements were taken at time of induction (time "0"), and 1, 2, 3, 4.5, 5.5, and 6.5 months after induction, or when mice became moribund. By the end of the experiment, 6 of the CM knock-in mice became sick with leukemia and 3 did not get sick.      
 
-```{r prepare-data-russ, eval=FALSE, include=FALSE}
+```{r prepare-data-rockne, eval=FALSE, include=FALSE}
 ## load data 
 rpkm_sorted_new <- read.delim("~/GitHub/cell-diff-reu-2018/data/rpkm_sorted_new.txt")
-dataname <- "Rockne Gene Expression Data" # enter title of data
 
-## change repeated gene names
+## change repeated gene names (R will not accept repeated row names)
 rpkm_sorted_new[,1] <- as.character(rpkm_sorted_new[,1])
 rpkm_sorted_new[5670,1] <- "BC002163-a"
 rpkm_sorted_new[6748,1] <- "BC002163-b"
@@ -56,22 +55,32 @@ rpkm_sorted_new[12703,1] <- "Snord58b-b"
 rpkm_sorted_new[3041,1] <- "Tff1-a"
 rpkm_sorted_new[8290,1] <- "Tff1-b"
 
-## make gene names row names
-row.names(rpkm_sorted_new) <- rpkm_sorted_new[,1]
-rpkm_sorted_new <- rpkm_sorted_new[,2:102]
-data <- as.matrix(rpkm_sorted_new)
+## create usable data matrix
+row.names(rpkm_sorted_new) <- rpkm_sorted_new[,1] # add row names
+rpkm_sorted_new <- rpkm_sorted_new[,2:102] # remove first row (contained row names)
+data <- as.matrix(rpkm_sorted_new) # convert to matrix
 rm(rpkm_sorted_new)
 
-## create factor for grouping by health: sick/not sick/control
-cellnames <- colnames(data)
+## create factor for grouping by health status: sick/not sick/control
+cellnames <- colnames(data) # save cell names in a vector
 healthgroups <- as.character(cellnames)
-healthgroups <- gsub(".*(CM.2684|CM.2690|CM.2708|CM.2731|CM.2718|CM.2719).*", "CM sick", healthgroups)
-healthgroups <- gsub(".*(CM.2685|CM.2686|CM.2709).*", "CM not sick", healthgroups)
-healthgroups <- gsub(".*CTL.*", "Control", healthgroups)
-healthgroups <- factor(healthgroups)
-healthcolors <- rainbow(nlevels(healthgroups))
+healthgroups <- gsub(".*(CM.2684|CM.2690|CM.2708|CM.2731|CM.2718|CM.2719).*", "CM sick", healthgroups) # replace all cell names corresponding to CM sick mice with title: "CM sick"
+healthgroups <- gsub(".*(CM.2685|CM.2686|CM.2709).*", "CM not sick", healthgroups) # replace all cell names corresponding to CM not sick mice with title: "CM not sick"
+healthgroups <- gsub(".*CTL.*", "Control", healthgroups) # replace all cellnames corresponding to control mice with title: "Control"
+healthgroups <- factor(healthgroups) # create factor
+# healthcolors <- rainbow(nlevels(healthgroups))
+healthcolors <- c("blue", "red", "black") # colors requested by Russ Rockne
 
-## create factor for grouping by mouse (16 mice)
+## health color gradient
+## creating gradients to use to color points. Lighter colors for earlier measurements, darker colors for later measurements
+blackgrad <- colorRampPalette(c("gray88", "black"))
+ctlcolors <- blackgrad(8) # black gradient for control mice 
+redgrad <- colorRampPalette(c("lightpink", "red"))
+sickcolors <- redgrad(8) # red gradient for CM sick mice 
+bluegrad <- colorRampPalette(c("paleturquoise", "blue"))
+nsickcolors <- bluegrad(8) # blue gradient for CM not sick mice
+
+## create factor for grouping by individual mouse (16 mice total)
 mousegroups <- as.character(cellnames)
 mousegroups <- gsub(".*CM.2684.*", "CM.2684", mousegroups)
 mousegroups <- gsub(".*CM.2685.*", "CM.2685", mousegroups)
@@ -101,116 +110,412 @@ timegroups <- gsub(".*X4.*", "3 Months", timegroups)
 timegroups <- gsub(".*X5.*", "4.5 Months", timegroups)
 timegroups <- gsub(".*X6.*", "5.5 Months", timegroups)
 timegroups <- gsub(".*X7.*", "6.5 Months", timegroups)
-timegroups <- gsub(".*L.*", "Moribund", timegroups)
+timegroups <- gsub(".*L.*", "Leukemia", timegroups)
 timegroups <- factor(timegroups)
 timecolors <- rainbow(nlevels(timegroups))
-
 ```
 
-```{r pca-rockne, eval=FALSE, include=FALSE}
-# IMPORTANT NOTE ON DIMENSIONS:
-# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
-# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
-# for Rockne data: use regular data matrix (genes x cells)
+```{r heatmap-rockne, eval=FALSE, include=FALSE}
+hmap <- heatmap(data)
+```
 
-## center data
+
+## PCA (Handwritten)
+
+This is the handwritten version of PCA in R, I used SVD for everything (not eig).  
+
+```{r pca-rockne, eval=FALSE, include=FALSE}
+## PCA DIMENSIONS: cells = rows, genes = columns 
+## for Rockne data: use TRANSPOSE of data matrix (want cells x genes)
+data <- t(data)
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=3)
+svd <- svd(M1centered, nu=3, nv=3) # only first 3 left/right singular vectors for efficiency
 U <- svd$u # dim: nrowx3
-V <- svd$v 
-# Note: U = M1centered %*% V %*% S^-1
+V <- svd$v # dim: ncolx3
+## Note: U = data %*% V %*% S^-1
 
 ## calculate weights
-weights <- t(M1centered) %*% U # columns of weights are weights, dim: ncolx3
-scores <- M1centered %*% V # basically U 
+# weights <- t(data) %*% U # dim: ncolx3
+scores <- data %*% V # dim: nrowx3
 ```
 
-#### Plots of weights 
-Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
+#### Plots of scores
+Scores were calculated by: scores <- data %*% V. V are the right singular vectors from SVD whose columns contain the eigenvectors of the covariance matrix. Scores give the coordinates of the individuals on the principal components (coefficients of the linear combination of original variables for each principal component).  
 
-2D plot of weights   
-```{r pca-plot2dweights}
-plot(x=weights[,1], y=weights[,2], 
-     xlab="PC1 weights", ylab="PC2 weights", 
-     col = healthcolors[healthgroups], 
-     pch=20, 
-     main = paste("PCA Weights (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0), 
-       legend = levels(healthgroups), 
-       pch = 20, 
-       col = healthcolors, 
-       ncol=1, cex=0.4)
+2D plot of scores (PC1 vs. PC2)   
+```{r pca-plot2dscores-1v2}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot
+plot(x=scores[,1], y=scores[,2],
+     xlab="PC1 scores", ylab="PC2 scores", 
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.7, 
+     main = "PCA Scores, Rockne")
+
+# ## plot colored points corresponding to time 
+# # plot control points w/ time sensitive colors 
+# points(x=scores[53:101,1], y=scores[53:101,2],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors 
+# points(x=scores[c(7:20,31:36),1], y=scores[c(7:20,31:36),2],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors 
+# points(x=scores[c(1:6,21:30,37:52),1], y=scores[c(1:6,21:30,37:52),2],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=scores[c(25,30,40,47,52),1], y=scores[c(25,30,40,47,52),2],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=scores[53:59,1], y=scores[53:59,2], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=scores[60:66,1], y=scores[60:66,2], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=scores[67:73,1], y=scores[67:73,2], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=scores[74:80,1], y=scores[74:80,2], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=scores[81:87,1], y=scores[81:87,2], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=scores[88:94,1], y=scores[88:94,2], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=scores[95:101,1], y=scores[95:101,2], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=scores[1:6,1], y=scores[1:6,2], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=scores[7:13,1], y=scores[7:13,2], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=scores[14:20,1], y=scores[14:20,2], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=scores[21:25,1], y=scores[21:25,2], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=scores[26:30,1], y=scores[26:30,2], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=scores[31:36,1], y=scores[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=scores[37:40,1], y=scores[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=scores[41:47,1], y=scores[41:47,2], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=scores[48:52,1], y=scores[48:52,2], col = "red4", lwd=0.7) # CM2719 sick
+
+# full list of colors 
+mousecolors <- c("coral1", "lightskyblue", "turquoise", "lightpink", "salmon", "blue", "red", "red3", "red4", "gray74", "gray74", "gray74", "gray74", "gray74", "gray74", "gray74")
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=scores[53:59,1], y=scores[53:59,2], col = "black", lwd=0.5) # CTL2689
+lines(x=scores[60:66,1], y=scores[60:66,2], col = "black", lwd=0.5) # CTL2692
+lines(x=scores[67:73,1], y=scores[67:73,2], col = "black", lwd=0.5) # CTL2700
+lines(x=scores[74:80,1], y=scores[74:80,2], col = "black", lwd=0.5) # CTL2702
+lines(x=scores[81:87,1], y=scores[81:87,2], col = "black", lwd=0.5) # CTL2705
+lines(x=scores[88:94,1], y=scores[88:94,2], col = "black", lwd=0.5) # CTL2720
+lines(x=scores[95:101,1], y=scores[95:101,2], col = "black", lwd=0.5) # CTL2683
+lines(x=scores[1:6,1], y=scores[1:6,2], col = "red", lwd=0.7) # CM2684 sick
+lines(x=scores[7:13,1], y=scores[7:13,2], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=scores[14:20,1], y=scores[14:20,2], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=scores[21:25,1], y=scores[21:25,2], col = "red", lwd=0.7) # CM2690 sick
+lines(x=scores[26:30,1], y=scores[26:30,2], col = "red", lwd=0.7) # CM2708 sick
+lines(x=scores[31:36,1], y=scores[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=scores[37:40,1], y=scores[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+lines(x=scores[41:47,1], y=scores[41:47,2], col = "red", lwd=0.7) # CM2718 sick
+lines(x=scores[48:52,1], y=scores[48:52,2], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.3,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.3,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # CM not sick do not have Leukemia 
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.3,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # controls do not have Leukemia 
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.33,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
 ```
 
-3D plot of weights 
-```{r pca-plot3dweights}
-plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
-       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
-       col = healthcolors[healthgroups], 
-       pch=20, 
-       main = paste("PCA Weights (Handwritten),", dataname))
-legend3d("bottomright", inset=c(0.1,0.1),
-         legend = levels(healthgroups), 
-         pch = 20, 
-         col = healthcolors, 
-         ncol=1, cex=1.5)
+
+2D plot of scores (1 vs. 3)   
+```{r pca-plot2dscores-1v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot
+plot(x=scores[,1], y=scores[,3], 
+     xlab="PC1 scores", ylab="PC3 scores",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+     main = "PCA Scores, Rockne")
+
+## plot separately colored points
+# # plot control points w/ time sensitive colors
+# points(x=scores[53:101,1], y=scores[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=scores[c(7:20,31:36),1], y=scores[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=scores[c(1:6,21:30,37:52),1], y=scores[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=scores[c(25,30,40,47,52),1], y=scores[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=scores[53:59,1], y=scores[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=scores[60:66,1], y=scores[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=scores[67:73,1], y=scores[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=scores[74:80,1], y=scores[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=scores[81:87,1], y=scores[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=scores[88:94,1], y=scores[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=scores[95:101,1], y=scores[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=scores[1:6,1], y=scores[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=scores[7:13,1], y=scores[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=scores[14:20,1], y=scores[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=scores[21:25,1], y=scores[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=scores[26:30,1], y=scores[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=scores[31:36,1], y=scores[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=scores[37:40,1], y=scores[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=scores[41:47,1], y=scores[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=scores[48:52,1], y=scores[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=scores[53:59,1], y=scores[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=scores[60:66,1], y=scores[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=scores[67:73,1], y=scores[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=scores[74:80,1], y=scores[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=scores[81:87,1], y=scores[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=scores[88:94,1], y=scores[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=scores[95:101,1], y=scores[95:101,3], col = "black", lwd=0.5) # CTL2683
+lines(x=scores[1:6,1], y=scores[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=scores[7:13,1], y=scores[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=scores[14:20,1], y=scores[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=scores[21:25,1], y=scores[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=scores[26:30,1], y=scores[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=scores[31:36,1], y=scores[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=scores[37:40,1], y=scores[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=scores[41:47,1], y=scores[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=scores[48:52,1], y=scores[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # CM not sick do not have Leukemia 
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # controls do not have Leukemia 
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
+
+2D plot of scores (2 vs. 3)   
+```{r pca-plot2dscores-2v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot
+plot(x=scores[,2], y=scores[,3], 
+     xlab="PC2 scores", ylab="PC3 scores",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+     main = "PCA Scores, Rockne")
+
+## plot colored points corresponding to time
+# # plot control points w/ time sensitive colors
+# points(x=scores[53:101,2], y=scores[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=scores[c(7:20,31:36),2], y=scores[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=scores[c(1:6,21:30,37:52),2], y=scores[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=scores[c(25,30,40,47,52),2], y=scores[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=scores[53:59,2], y=scores[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=scores[60:66,2], y=scores[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=scores[67:73,2], y=scores[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=scores[74:80,2], y=scores[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=scores[81:87,2], y=scores[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=scores[88:94,2], y=scores[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=scores[95:101,2], y=scores[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=scores[1:6,2], y=scores[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=scores[7:13,2], y=scores[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=scores[14:20,2], y=scores[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=scores[21:25,2], y=scores[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=scores[26:30,2], y=scores[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=scores[31:36,2], y=scores[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=scores[37:40,2], y=scores[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=scores[41:47,2], y=scores[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=scores[48:52,2], y=scores[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=scores[53:59,2], y=scores[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=scores[60:66,2], y=scores[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=scores[67:73,2], y=scores[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=scores[74:80,2], y=scores[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=scores[81:87,2], y=scores[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=scores[88:94,2], y=scores[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=scores[95:101,2], y=scores[95:101,3], col = "black", lwd=0.5) # CTL2683
+lines(x=scores[1:6,2], y=scores[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=scores[7:13,2], y=scores[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=scores[14:20,2], y=scores[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=scores[21:25,2], y=scores[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=scores[26:30,2], y=scores[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=scores[31:36,2], y=scores[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=scores[37:40,2], y=scores[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=scores[41:47,2], y=scores[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=scores[48:52,2], y=scores[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # CM not sick do not have Leukemia 
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")), # controls do not have Leukemia 
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
+
+3D plot of scores 
+```{r pca-plot3dscores}
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+       col = healthcolors[healthgroups],
+       pch3d=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+       main = "PCA Scores, Rockne")
+
+## plot colored points corresponding to time -- doesn't work for rglwidget
+# # plot control points w/ time sensitive colors
+# pch3d(x=scores[53:101,1], y=scores[53:101,2], z=scores[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# pch3d(x=scores[c(7:20,31:36),1], y=scores[c(7:20,31:36),2], z=scores[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# pch3d(x=scores[c(1:6,21:30,37:52),1], y=scores[c(1:6,21:30,37:52),2], z=scores[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangles 
+pch3d(x=scores[c(25,30,40,47,52),1], y=scores[c(25,30,40,47,52),2], z=scores[c(25,30,40,47,52),3],
+      # col = sickcolors[8],
+      col = "red",
+      pch=17, cex=1.2)
+
+## plot individually colored connecting lines
+# gray for all control mice
+# lines3d(x=scores[53:59,1], y=scores[53:59,2], z=scores[53:59,3], col = "gray74", lwd=1) # CTL2689
+# lines3d(x=scores[60:66,1], y=scores[60:66,2], z=scores[60:66,3], col = "gray74", lwd=1) # CTL2692
+# lines3d(x=scores[67:73,1], y=scores[67:73,2], z=scores[67:73,3], col = "gray74", lwd=1) # CTL2700
+# lines3d(x=scores[74:80,1], y=scores[74:80,2], z=scores[74:80,3], col = "gray74", lwd=1) # CTL2702
+# lines3d(x=scores[81:87,1], y=scores[81:87,2], z=scores[81:87,3], col = "gray74", lwd=1) # CTL2705
+# lines3d(x=scores[88:94,1], y=scores[88:94,2], z=scores[88:94,3], col = "gray74", lwd=1) # CTL2720
+# lines3d(x=scores[95:101,1], y=scores[95:101,2], z=scores[95:101,3], col = "gray74", lwd=1) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines3d(x=scores[1:6,1], y=scores[1:6,2], z=scores[1:6,3], col = "coral1", lwd=1) # CM2684 sick
+# lines3d(x=scores[7:13,1], y=scores[7:13,2], z=scores[7:13,3], col = "lightskyblue", lwd=1) # CM2685 not sick
+# lines3d(x=scores[14:20,1], y=scores[14:20,2], z=scores[14:20,3], col = "turquoise", lwd=1) # CM2686 not sick
+# lines3d(x=scores[21:25,1], y=scores[21:25,2], z=scores[21:25,3], col = "lightpink", lwd=1) # CM2690 sick
+# lines3d(x=scores[26:30,1], y=scores[26:30,2], z=scores[26:30,3], col = "salmon", lwd=1) # CM2708 sick
+# lines3d(x=scores[31:36,1], y=scores[31:36,2], z=scores[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+# lines3d(x=scores[37:40,1], y=scores[37:40,2], z=scores[37:40,3], col = "red", lwd=1) # CM2731 sick
+# lines3d(x=scores[41:47,1], y=scores[41:47,2], z=scores[41:47,3], col = "red3", lwd=1) # CM2718 sick
+# lines3d(x=scores[48:52,1], y=scores[48:52,2], z=scores[48:52,3], col = "red4", lwd=1) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines3d(x=scores[53:59,1], y=scores[53:59,2], z=scores[53:59,3], col = "black", lwd=1) # CTL2689
+lines3d(x=scores[60:66,1], y=scores[60:66,2], z=scores[60:66,3], col = "black", lwd=1) # CTL2692
+lines3d(x=scores[67:73,1], y=scores[67:73,2], z=scores[67:73,3], col = "black", lwd=1) # CTL2700
+lines3d(x=scores[74:80,1], y=scores[74:80,2], z=scores[74:80,3], col = "black", lwd=1) # CTL2702
+lines3d(x=scores[81:87,1], y=scores[81:87,2], z=scores[81:87,3], col = "black", lwd=1) # CTL2705
+lines3d(x=scores[88:94,1], y=scores[88:94,2], z=scores[88:94,3], col = "black", lwd=1) # CTL2720
+lines3d(x=scores[95:101,1], y=scores[95:101,2], z=scores[95:101,3], col = "black", lwd=1) # CTL2683
+lines3d(x=scores[1:6,1], y=scores[1:6,2], z=scores[1:6,3], col = "red", lwd=1) # CM2684 sick
+lines3d(x=scores[7:13,1], y=scores[7:13,2], z=scores[7:13,3], col = "blue", lwd=1) # CM2685 not sick
+lines3d(x=scores[14:20,1], y=scores[14:20,2], z=scores[14:20,3], col = "blue", lwd=1) # CM2686 not sick
+lines3d(x=scores[21:25,1], y=scores[21:25,2], z=scores[21:25,3], col = "red", lwd=1) # CM2690 sick
+lines3d(x=scores[26:30,1], y=scores[26:30,2], z=scores[26:30,3], col = "red", lwd=1) # CM2708 sick
+lines3d(x=scores[31:36,1], y=scores[31:36,2], z=scores[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+lines3d(x=scores[37:40,1], y=scores[37:40,2], z=scores[37:40,3], col = "red", lwd=1) # CM2731 sick
+lines3d(x=scores[41:47,1], y=scores[41:47,2], z=scores[41:47,3], col = "red", lwd=1) # CM2718 sick
+lines3d(x=scores[48:52,1], y=scores[48:52,2], z=scores[48:52,3], col = "red", lwd=1) # CM2719 sick
+
 rglwidget()
 ```
-
-#### Plots of principal components
-
-2D plot of PCs (eigenvectors of actual covariance matrix)  
-```{r pca-plot2dpcs}
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
-     xlab="PC1", ylab="PC2", 
-     col = healthcolors[healthgroups], 
-     pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0),
-       legend = levels(healthgroups),
-       pch = 20,
-       col = healthcolors,
-       ncol=1, cex=0.4)
-```
-
-3D plot of PCs (eigenvectors of actual covariance matrix)  
-```{r pca-plot3dpcs}
-## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
-       xlab="PC1", ylab="PC2", zlab="PC3", 
-       col = healthcolors[healthgroups], 
-       pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
-legend3d("bottomright", inset=c(0.1,0.1),
-         legend = levels(healthgroups),
-         pch = 20, 
-         col = healthcolors, 
-         ncol=1, cex=1.5)
-rglwidget()
-```
-
-
-
-2D plot of PCs (eigenvectors of actual covariance matrix)  
-```{r pca-plot2dpcs-gradient}
-geneexp1 <- factor(data[,1])
-geneexp300 <- factor(data[,300])
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
-     xlab="PC1", ylab="PC2", 
-     col = rainbow(nlevels(geneexp300))[geneexp300],
-     pch = 20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0),
-       legend = levels(geneexp2),
-       pch = 20,
-       col = colors,
-       ncol=3, cex=0.4)
-```
-
 
 ----
 
@@ -218,13 +523,13 @@ legend("bottomright", inset = c(0,0),
 
 Diffusion mapping using destiny package.  
 ```{r diffmap-rockne, eval=FALSE, include=FALSE}
-## previously read in data and converted to matrix 
 ## convert to expression set
-## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
-## Rockne does NOT need to transpose data
+## EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Rockne needs original data format, need to take transpose again
+data <- t(data)
 dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
 
-## diffusion map (un-normalized data)
+## diffusion map
 dm <- DiffusionMap(dataES)
 
 ## sigmas
@@ -232,33 +537,373 @@ sigmas <- find_sigmas(dataES)
 ```
 
 2D Diffusion Map  
-```{r diffmap-plot2d}
-## plot 2d
+```{r diffmap-plot2d-1v2}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## create initial plot
 plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
      xlab="DC1", ylab="DC2",
      col = healthcolors[healthgroups],
-     pch=20, 
-     main = paste("Diffusion Map (destiny),", dataname))
-legend("bottomleft", inset=c(0,0), 
-       legend=levels(healthgroups), 
-       col=healthcolors, 
-       pch=20, 
-       ncol=1, cex=0.3) 
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5,
+     main = "Diffusion Map, Rockne")
+
+## plot colored points corresponding to time
+# # plot control points w/ time sensitive colors
+# points(x=eigenvectors(dm)[53:101,1], y=eigenvectors(dm)[53:101,2],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(7:20,31:36),1], y=eigenvectors(dm)[c(7:20,31:36),2],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(1:6,21:30,37:52),1], y=eigenvectors(dm)[c(1:6,21:30,37:52),2],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=eigenvectors(dm)[c(25,30,40,47,52),1], y=eigenvectors(dm)[c(25,30,40,47,52),2],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,2], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,2], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,2], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,2], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,2], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,2], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,2], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,2], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,2], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,2], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,2], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,2], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,2], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,2], col = "red4", lwd=0.7) # CM2719 sick
+
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,2], col = "black", lwd=0.5) # CTL2689
+lines(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,2], col = "black", lwd=0.5) # CTL2692
+lines(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,2], col = "black", lwd=0.5) # CTL2700
+lines(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,2], col = "black", lwd=0.5) # CTL2702
+lines(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,2], col = "black", lwd=0.5) # CTL2705
+lines(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,2], col = "black", lwd=0.5) # CTL2720
+lines(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,2], col = "black", lwd=0.5) # CTL2683
+# different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+lines(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,2], col = "red", lwd=0.7) # CM2684 sick
+lines(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,2], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,2], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,2], col = "red", lwd=0.7) # CM2690 sick
+lines(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,2], col = "red", lwd=0.7) # CM2708 sick
+lines(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+lines(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,2], col = "red", lwd=0.7) # CM2718 sick
+lines(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,2], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
 ```
+
+2D Diffusion Map (1 vs. 3)  
+```{r diffmap-plot2d-1v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot
+plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,3],
+     xlab="DC1", ylab="DC3",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5,
+     main = "Diffusion Map, Rockne")
+
+## plot colored points corresponding to time 
+# # plot control points w/ time sensitive colors
+# points(x=eigenvectors(dm)[53:101,1], y=eigenvectors(dm)[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(7:20,31:36),1], y=eigenvectors(dm)[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(1:6,21:30,37:52),1], y=eigenvectors(dm)[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=eigenvectors(dm)[c(25,30,40,47,52),1], y=eigenvectors(dm)[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,3], col = "black", lwd=0.5) # CTL2683
+# different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+lines(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
+2D Diffusion Map (2 vs. 3)  
+```{r diffmap-plot2d-2v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot 
+plot(x=eigenvectors(dm)[,2], y=eigenvectors(dm)[,3],
+     xlab="DC2", ylab="DC3",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5,
+     main = "Diffusion Map, Rockne")
+
+## plot colored points corresponding to time 
+# # plot control points w/ time sensitive colors
+# points(x=eigenvectors(dm)[53:101,2], y=eigenvectors(dm)[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(7:20,31:36),2], y=eigenvectors(dm)[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=eigenvectors(dm)[c(1:6,21:30,37:52),2], y=eigenvectors(dm)[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=eigenvectors(dm)[c(25,30,40,47,52),2], y=eigenvectors(dm)[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+# ## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=eigenvectors(dm)[53:59,2], y=eigenvectors(dm)[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=eigenvectors(dm)[60:66,2], y=eigenvectors(dm)[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=eigenvectors(dm)[67:73,2], y=eigenvectors(dm)[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=eigenvectors(dm)[74:80,2], y=eigenvectors(dm)[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=eigenvectors(dm)[81:87,2], y=eigenvectors(dm)[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=eigenvectors(dm)[88:94,2], y=eigenvectors(dm)[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=eigenvectors(dm)[95:101,2], y=eigenvectors(dm)[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=eigenvectors(dm)[1:6,2], y=eigenvectors(dm)[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=eigenvectors(dm)[7:13,2], y=eigenvectors(dm)[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=eigenvectors(dm)[14:20,2], y=eigenvectors(dm)[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=eigenvectors(dm)[21:25,2], y=eigenvectors(dm)[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=eigenvectors(dm)[26:30,2], y=eigenvectors(dm)[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=eigenvectors(dm)[31:36,2], y=eigenvectors(dm)[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=eigenvectors(dm)[37:40,2], y=eigenvectors(dm)[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=eigenvectors(dm)[41:47,2], y=eigenvectors(dm)[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=eigenvectors(dm)[48:52,2], y=eigenvectors(dm)[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines
+# gray for all control mice
+lines(x=eigenvectors(dm)[53:59,2], y=eigenvectors(dm)[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=eigenvectors(dm)[60:66,2], y=eigenvectors(dm)[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=eigenvectors(dm)[67:73,2], y=eigenvectors(dm)[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=eigenvectors(dm)[74:80,2], y=eigenvectors(dm)[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=eigenvectors(dm)[81:87,2], y=eigenvectors(dm)[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=eigenvectors(dm)[88:94,2], y=eigenvectors(dm)[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=eigenvectors(dm)[95:101,2], y=eigenvectors(dm)[95:101,3], col = "black", lwd=0.5) # CTL2683
+# different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+lines(x=eigenvectors(dm)[1:6,2], y=eigenvectors(dm)[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=eigenvectors(dm)[7:13,2], y=eigenvectors(dm)[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=eigenvectors(dm)[14:20,2], y=eigenvectors(dm)[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=eigenvectors(dm)[21:25,2], y=eigenvectors(dm)[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=eigenvectors(dm)[26:30,2], y=eigenvectors(dm)[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=eigenvectors(dm)[31:36,2], y=eigenvectors(dm)[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=eigenvectors(dm)[37:40,2], y=eigenvectors(dm)[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=eigenvectors(dm)[41:47,2], y=eigenvectors(dm)[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=eigenvectors(dm)[48:52,2], y=eigenvectors(dm)[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+# ## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
 
 3D Diffusion Map  
 ```{r diffmap-plot3d}
-## plot 3d
 plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
        xlab="DC1", ylab="DC2", zlab="DC3",
        col = healthcolors[healthgroups],
-       pch=20, 
-       main = paste("Diffusion Map (destiny) of", dataname))
-legend3d("bottomright", inset=c(0.1,0.1),
-         legend = levels(healthgroups),
-         pch = 20, 
-         col = healthcolors, 
-         ncol=1, cex=1.5)
+       pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+       main = "Diffusion Map, Rockne")
+
+## plot separately colored points -- doesn't work for rglwidget (3d)
+# # plot control points w/ time sensitive colors 
+# pch3d(x=eigenvectors(dm)[53:101,1], y=eigenvectors(dm)[53:101,2], z=eigenvectors(dm)[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# pch3d(x=eigenvectors(dm)[c(7:20,31:36),1], y=eigenvectors(dm)[c(7:20,31:36),2], z=eigenvectors(dm)[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# pch3d(x=eigenvectors(dm)[c(1:6,21:30,37:52),1], y=eigenvectors(dm)[c(1:6,21:30,37:52),2], z=eigenvectors(dm)[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangles -- doesn't work well with diffusion mapping; unclear why?
+# pch3d(x=eigenvectors(dm)[c(25,30,40,47,52),1], y=eigenvectors(dm)[c(25,30,40,47,52),2], z=eigenvectors(dm)[c(25,30,40,47,52),3],
+#       # col = sickcolors[8],
+#       col = "red",
+#       pch=17, cex=1)
+
+# ## plot individually colored connecting lines
+# # gray for all control mice
+# lines3d(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,2], z=eigenvectors(dm)[53:59,3], col = "gray74", lwd=1) # CTL2689
+# lines3d(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,2], z=eigenvectors(dm)[60:66,3], col = "gray74", lwd=1) # CTL2692
+# lines3d(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,2], z=eigenvectors(dm)[67:73,3], col = "gray74", lwd=1) # CTL2700
+# lines3d(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,2], z=eigenvectors(dm)[74:80,3], col = "gray74", lwd=1) # CTL2702
+# lines3d(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,2], z=eigenvectors(dm)[81:87,3], col = "gray74", lwd=1) # CTL2705
+# lines3d(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,2], z=eigenvectors(dm)[88:94,3], col = "gray74", lwd=1) # CTL2720
+# lines3d(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,2], z=eigenvectors(dm)[95:101,3], col = "gray74", lwd=1) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines3d(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,2], z=eigenvectors(dm)[1:6,3], col = "coral1", lwd=1) # CM2684 sick
+# lines3d(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,2], z=eigenvectors(dm)[7:13,3], col = "lightskyblue", lwd=1) # CM2685 not sick
+# lines3d(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,2], z=eigenvectors(dm)[14:20,3], col = "turquoise", lwd=1) # CM2686 not sick
+# lines3d(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,2], z=eigenvectors(dm)[21:25,3], col = "lightpink", lwd=1) # CM2690 sick
+# lines3d(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,2], z=eigenvectors(dm)[26:30,3], col = "salmon", lwd=1) # CM2708 sick
+# lines3d(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,2], z=eigenvectors(dm)[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+# lines3d(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,2], z=eigenvectors(dm)[37:40,3], col = "red", lwd=1) # CM2731 sick
+# lines3d(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,2], z=eigenvectors(dm)[41:47,3], col = "red3", lwd=1) # CM2718 sick
+# lines3d(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,2], z=eigenvectors(dm)[48:52,3], col = "red4", lwd=1) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines3d(x=eigenvectors(dm)[53:59,1], y=eigenvectors(dm)[53:59,2], z=eigenvectors(dm)[53:59,3], col = "black", lwd=1) # CTL2689
+lines3d(x=eigenvectors(dm)[60:66,1], y=eigenvectors(dm)[60:66,2], z=eigenvectors(dm)[60:66,3], col = "black", lwd=1) # CTL2692
+lines3d(x=eigenvectors(dm)[67:73,1], y=eigenvectors(dm)[67:73,2], z=eigenvectors(dm)[67:73,3], col = "black", lwd=1) # CTL2700
+lines3d(x=eigenvectors(dm)[74:80,1], y=eigenvectors(dm)[74:80,2], z=eigenvectors(dm)[74:80,3], col = "black", lwd=1) # CTL2702
+lines3d(x=eigenvectors(dm)[81:87,1], y=eigenvectors(dm)[81:87,2], z=eigenvectors(dm)[81:87,3], col = "black", lwd=1) # CTL2705
+lines3d(x=eigenvectors(dm)[88:94,1], y=eigenvectors(dm)[88:94,2], z=eigenvectors(dm)[88:94,3], col = "black", lwd=1) # CTL2720
+lines3d(x=eigenvectors(dm)[95:101,1], y=eigenvectors(dm)[95:101,2], z=eigenvectors(dm)[95:101,3], col = "black", lwd=1) # CTL2683
+lines3d(x=eigenvectors(dm)[1:6,1], y=eigenvectors(dm)[1:6,2], z=eigenvectors(dm)[1:6,3], col = "red", lwd=1) # CM2684 sick
+lines3d(x=eigenvectors(dm)[7:13,1], y=eigenvectors(dm)[7:13,2], z=eigenvectors(dm)[7:13,3], col = "blue", lwd=1) # CM2685 not sick
+lines3d(x=eigenvectors(dm)[14:20,1], y=eigenvectors(dm)[14:20,2], z=eigenvectors(dm)[14:20,3], col = "blue", lwd=1) # CM2686 not sick
+lines3d(x=eigenvectors(dm)[21:25,1], y=eigenvectors(dm)[21:25,2], z=eigenvectors(dm)[21:25,3], col = "red", lwd=1) # CM2690 sick
+lines3d(x=eigenvectors(dm)[26:30,1], y=eigenvectors(dm)[26:30,2], z=eigenvectors(dm)[26:30,3], col = "red", lwd=1) # CM2708 sick
+lines3d(x=eigenvectors(dm)[31:36,1], y=eigenvectors(dm)[31:36,2], z=eigenvectors(dm)[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+lines3d(x=eigenvectors(dm)[37:40,1], y=eigenvectors(dm)[37:40,2], z=eigenvectors(dm)[37:40,3], col = "red", lwd=1) # CM2731 sick
+lines3d(x=eigenvectors(dm)[41:47,1], y=eigenvectors(dm)[41:47,2], z=eigenvectors(dm)[41:47,3], col = "red", lwd=1) # CM2718 sick
+lines3d(x=eigenvectors(dm)[48:52,1], y=eigenvectors(dm)[48:52,2], z=eigenvectors(dm)[48:52,3], col = "red", lwd=1) # CM2719 sick
+
 rglwidget()
 ```
 
@@ -275,67 +920,378 @@ t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
 
 ```{r tsne-rockne, eval=FALSE, include=FALSE}
 ## already read in data and converted to matrix
-# Note: can take very, very long with large datasets, such as Paul
-# t-SNE DIMENSIONS: rows=cells, columns=genes
-# Paul data needs transpose to have correct dimensions
+## Note: can take very long with this dataset 
+## t-SNE DIMENSIONS: rows=cells, columns=genes
+## Rockne uses t(data)
 
-ydata1 <- tsne(t(data), k=3, max_iter = 200, perplexity = 30) # ydata = matrix(rnorm(k * n),n) 
+ydata3d <- tsne(t(data), k=3, max_iter = 200, perplexity = 30) # ydata = matrix(rnorm(k * n),n)
+# ydata1 <- tsne(t(data), k=3, max_iter = 200, perplexity = 5) # smaller perplexity
 ```
 
-2D t-SNE plot  
-```{r tsne-plot2d}
+2D t-SNE plot (1 vs. 2)  
+```{r tsne-plot2d-1v2}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot
 plot(x=ydata3d[,1], y=ydata3d[,2], 
-     col = colors[groupsf], 
-     pch=20,
-     main = paste("2D t-SNE Plot of", dataname, "(tsne)")) 
-legend("bottomleft", inset = c(0,0), 
-       legend = levels(groupsf), 
-       pch = 20, 
-       col = colors, 
-       ncol=3, cex=0.3) 
+     xlab="", ylab="",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+     main = "t-SNE, Rockne (1 vs. 2)")
+
+## plot colored points corresponding to time
+# # plot control points w/ time sensitive colors 
+# points(x=ydata3d[53:101,1], y=ydata3d[53:101,2],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=ydata3d[c(7:20,31:36),1], y=ydata3d[c(7:20,31:36),2],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=ydata3d[c(1:6,21:30,37:52),1], y=ydata3d[c(1:6,21:30,37:52),2],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=ydata3d[c(25,30,40,47,52),1], y=ydata3d[c(25,30,40,47,52),2],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+# ## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=ydata3d[53:59,1], y=ydata3d[53:59,2], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=ydata3d[60:66,1], y=ydata3d[60:66,2], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=ydata3d[67:73,1], y=ydata3d[67:73,2], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=ydata3d[74:80,1], y=ydata3d[74:80,2], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=ydata3d[81:87,1], y=ydata3d[81:87,2], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=ydata3d[88:94,1], y=ydata3d[88:94,2], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=ydata3d[95:101,1], y=ydata3d[95:101,2], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=ydata3d[1:6,1], y=ydata3d[1:6,2], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=ydata3d[7:13,1], y=ydata3d[7:13,2], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=ydata3d[14:20,1], y=ydata3d[14:20,2], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=ydata3d[21:25,1], y=ydata3d[21:25,2], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=ydata3d[26:30,1], y=ydata3d[26:30,2], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=ydata3d[31:36,1], y=ydata3d[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=ydata3d[37:40,1], y=ydata3d[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=ydata3d[41:47,1], y=ydata3d[41:47,2], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=ydata3d[48:52,1], y=ydata3d[48:52,2], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=ydata3d[53:59,1], y=ydata3d[53:59,2], col = "black", lwd=0.5) # CTL2689
+lines(x=ydata3d[60:66,1], y=ydata3d[60:66,2], col = "black", lwd=0.5) # CTL2692
+lines(x=ydata3d[67:73,1], y=ydata3d[67:73,2], col = "black", lwd=0.5) # CTL2700
+lines(x=ydata3d[74:80,1], y=ydata3d[74:80,2], col = "black", lwd=0.5) # CTL2702
+lines(x=ydata3d[81:87,1], y=ydata3d[81:87,2], col = "black", lwd=0.5) # CTL2705
+lines(x=ydata3d[88:94,1], y=ydata3d[88:94,2], col = "black", lwd=0.5) # CTL2720
+lines(x=ydata3d[95:101,1], y=ydata3d[95:101,2], col = "black", lwd=0.5) # CTL2683
+lines(x=ydata3d[1:6,1], y=ydata3d[1:6,2], col = "red", lwd=0.7) # CM2684 sick
+lines(x=ydata3d[7:13,1], y=ydata3d[7:13,2], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=ydata3d[14:20,1], y=ydata3d[14:20,2], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=ydata3d[21:25,1], y=ydata3d[21:25,2], col = "red", lwd=0.7) # CM2690 sick
+lines(x=ydata3d[26:30,1], y=ydata3d[26:30,2], col = "red", lwd=0.7) # CM2708 sick
+lines(x=ydata3d[31:36,1], y=ydata3d[31:36,2], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=ydata3d[37:40,1], y=ydata3d[37:40,2], col = "red", lwd=0.7) # CM2731 sick
+lines(x=ydata3d[41:47,1], y=ydata3d[41:47,2], col = "red", lwd=0.7) # CM2718 sick
+lines(x=ydata3d[48:52,1], y=ydata3d[48:52,2], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.3,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.3,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.3,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.33,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
 ```
+
+2D t-SNE plot (1 vs. 3)  
+```{r tsne-plot2d-1v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot 
+plot(x=ydata3d[,1], y=ydata3d[,3], 
+     xlab="", ylab="",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+     main = "t-SNE, Rockne (1 vs. 3)")
+
+## plot colored points corresponding to time 
+# # plot control points w/ time sensitive colors
+# points(x=ydata3d[53:101,1], y=ydata3d[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=ydata3d[c(7:20,31:36),1], y=ydata3d[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=ydata3d[c(1:6,21:30,37:52),1], y=ydata3d[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=ydata3d[c(25,30,40,47,52),1], y=ydata3d[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red",
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=ydata3d[53:59,1], y=ydata3d[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=ydata3d[60:66,1], y=ydata3d[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=ydata3d[67:73,1], y=ydata3d[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=ydata3d[74:80,1], y=ydata3d[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=ydata3d[81:87,1], y=ydata3d[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=ydata3d[88:94,1], y=ydata3d[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=ydata3d[95:101,1], y=ydata3d[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=ydata3d[1:6,1], y=ydata3d[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=ydata3d[7:13,1], y=ydata3d[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=ydata3d[14:20,1], y=ydata3d[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=ydata3d[21:25,1], y=ydata3d[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=ydata3d[26:30,1], y=ydata3d[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=ydata3d[31:36,1], y=ydata3d[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=ydata3d[37:40,1], y=ydata3d[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=ydata3d[41:47,1], y=ydata3d[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=ydata3d[48:52,1], y=ydata3d[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines 
+# black/red/blue
+lines(x=ydata3d[53:59,1], y=ydata3d[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=ydata3d[60:66,1], y=ydata3d[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=ydata3d[67:73,1], y=ydata3d[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=ydata3d[74:80,1], y=ydata3d[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=ydata3d[81:87,1], y=ydata3d[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=ydata3d[88:94,1], y=ydata3d[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=ydata3d[95:101,1], y=ydata3d[95:101,3], col = "black", lwd=0.5) # CTL2683
+lines(x=ydata3d[1:6,1], y=ydata3d[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=ydata3d[7:13,1], y=ydata3d[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=ydata3d[14:20,1], y=ydata3d[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=ydata3d[21:25,1], y=ydata3d[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=ydata3d[26:30,1], y=ydata3d[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=ydata3d[31:36,1], y=ydata3d[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=ydata3d[37:40,1], y=ydata3d[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=ydata3d[41:47,1], y=ydata3d[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=ydata3d[48:52,1], y=ydata3d[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# # legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.5)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
+2D t-SNE plot (2 vs. 3)  
+```{r tsne-plot2d-2v3}
+par(mar=c(5.1,4.1,4.1,8.1), xpd=TRUE) # add extra space for legend
+
+## initial plot 
+plot(x=ydata3d[,2], y=ydata3d[,3], 
+     xlab="", ylab="",
+     col = healthcolors[healthgroups],
+     pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5, 
+     main = "t-SNE, Rockne (2 vs. 3)")
+
+## plot colored points corresponding to time 
+# # plot control points w/ time sensitive colors
+# points(x=ydata3d[53:101,2], y=ydata3d[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive colors
+# points(x=ydata3d[c(7:20,31:36),2], y=ydata3d[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive colors
+# points(x=ydata3d[c(1:6,21:30,37:52),2], y=ydata3d[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangle
+points(x=ydata3d[c(25,30,40,47,52),2], y=ydata3d[c(25,30,40,47,52),3],
+       # col = sickcolors[8],
+       col = "red", 
+       pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice
+# lines(x=ydata3d[53:59,2], y=ydata3d[53:59,3], col = "gray74", lwd=0.5) # CTL2689
+# lines(x=ydata3d[60:66,2], y=ydata3d[60:66,3], col = "gray74", lwd=0.5) # CTL2692
+# lines(x=ydata3d[67:73,2], y=ydata3d[67:73,3], col = "gray74", lwd=0.5) # CTL2700
+# lines(x=ydata3d[74:80,2], y=ydata3d[74:80,3], col = "gray74", lwd=0.5) # CTL2702
+# lines(x=ydata3d[81:87,2], y=ydata3d[81:87,3], col = "gray74", lwd=0.5) # CTL2705
+# lines(x=ydata3d[88:94,2], y=ydata3d[88:94,3], col = "gray74", lwd=0.5) # CTL2720
+# lines(x=ydata3d[95:101,2], y=ydata3d[95:101,3], col = "gray74", lwd=0.5) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines(x=ydata3d[1:6,2], y=ydata3d[1:6,3], col = "coral1", lwd=0.7) # CM2684 sick
+# lines(x=ydata3d[7:13,2], y=ydata3d[7:13,3], col = "lightskyblue", lwd=0.7) # CM2685 not sick
+# lines(x=ydata3d[14:20,2], y=ydata3d[14:20,3], col = "turquoise", lwd=0.7) # CM2686 not sick
+# lines(x=ydata3d[21:25,2], y=ydata3d[21:25,3], col = "lightpink", lwd=0.7) # CM2690 sick
+# lines(x=ydata3d[26:30,2], y=ydata3d[26:30,3], col = "salmon", lwd=0.7) # CM2708 sick
+# lines(x=ydata3d[31:36,2], y=ydata3d[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+# lines(x=ydata3d[37:40,2], y=ydata3d[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+# lines(x=ydata3d[41:47,2], y=ydata3d[41:47,3], col = "red3", lwd=0.7) # CM2718 sick
+# lines(x=ydata3d[48:52,2], y=ydata3d[48:52,3], col = "red4", lwd=0.7) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines(x=ydata3d[53:59,2], y=ydata3d[53:59,3], col = "black", lwd=0.5) # CTL2689
+lines(x=ydata3d[60:66,2], y=ydata3d[60:66,3], col = "black", lwd=0.5) # CTL2692
+lines(x=ydata3d[67:73,2], y=ydata3d[67:73,3], col = "black", lwd=0.5) # CTL2700
+lines(x=ydata3d[74:80,2], y=ydata3d[74:80,3], col = "black", lwd=0.5) # CTL2702
+lines(x=ydata3d[81:87,2], y=ydata3d[81:87,3], col = "black", lwd=0.5) # CTL2705
+lines(x=ydata3d[88:94,2], y=ydata3d[88:94,3], col = "black", lwd=0.5) # CTL2720
+lines(x=ydata3d[95:101,2], y=ydata3d[95:101,3], col = "black", lwd=0.5) # CTL2683
+lines(x=ydata3d[1:6,2], y=ydata3d[1:6,3], col = "red", lwd=0.7) # CM2684 sick
+lines(x=ydata3d[7:13,2], y=ydata3d[7:13,3], col = "blue", lwd=0.7) # CM2685 not sick
+lines(x=ydata3d[14:20,2], y=ydata3d[14:20,3], col = "blue", lwd=0.7) # CM2686 not sick
+lines(x=ydata3d[21:25,2], y=ydata3d[21:25,3], col = "red", lwd=0.7) # CM2690 sick
+lines(x=ydata3d[26:30,2], y=ydata3d[26:30,3], col = "red", lwd=0.7) # CM2708 sick
+lines(x=ydata3d[31:36,2], y=ydata3d[31:36,3], col = "blue", lwd=0.7) # CM2709 not sick
+lines(x=ydata3d[37:40,2], y=ydata3d[37:40,3], col = "red", lwd=0.7) # CM2731 sick
+lines(x=ydata3d[41:47,2], y=ydata3d[41:47,3], col = "red", lwd=0.7) # CM2718 sick
+lines(x=ydata3d[48:52,2], y=ydata3d[48:52,3], col = "red", lwd=0.7) # CM2719 sick
+
+## add legends 
+# legend for CM sick point colors (shades of red)
+# legend("bottomright", inset = c(-0.33,0.3),
+#        legend = levels(timegroups),
+#        title = "CM sick",
+#        pch = c(20,20,20,20,20,20,20,17),
+#        col = sickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for CM not sick point colors (shades of blue)
+# legend("bottomright", inset = c(-0.33,0.15),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "CM not sick",
+#        pch = 20,
+#        col = nsickcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for control mice point colors (shades of gray)
+# legend("bottomright", inset = c(-0.33,0),
+#        legend = levels(droplevels(timegroups, exclude = "Leukemia")),
+#        title = "Control",
+#        pch = 20,
+#        col = ctlcolors,
+#        ncol=3, cex=0.3, pt.cex=0.7)
+# # legend for individual mouse colors (line colors)
+# legend("bottomright", inset = c(-0.35,0.5),
+#        legend = levels(mousegroups),
+#        lwd=0.6,
+#        col = mousecolors,
+#        ncol=3, cex=0.3)
+```
+
 
 3D t-SNE plot  
 ```{r tsne-plot3d}
-plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
-       col=colors[groupsf], 
-       pch=20,
-       main = paste("3D t-SNE Plot of", dataname, "(tsne)"))
-legend3d("bottomright", inset=c(0.1,0.1),
-         legend = levels(groupsf),  
-         pch = 20, 
-         col = colors, 
-         ncol=3, cex=1.5)
+plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3],
+       xlab="", ylab="", zlab="",
+       col=healthcolors[healthgroups], 
+       pch=c(20,20,20,20,20,20,20,17)[timegroups], cex=0.5,
+       main = "t-SNE, Rockne")
+
+## plot colored points corresponding to time -- doesn't work for rglwidget (3d)
+# # plot control points w/ time sensitive color
+# pch3d(x=ydata3d[53:101,1], y=ydata3d[53:101,2], z=ydata3d[53:101,3],
+#        col = ctlcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot not sick points w/ time sensitive color
+# pch3d(x=ydata3d[c(7:20,31:36),1], y=ydata3d[c(7:20,31:36),2], z=ydata3d[c(7:20,31:36),3],
+#        col = nsickcolors[timegroups],
+#        pch=20, cex=0.7)
+# # plot sick points w/ time sensitive color
+# pch3d(x=ydata3d[c(1:6,21:30,37:52),1], y=ydata3d[c(1:6,21:30,37:52),2], z=ydata3d[c(1:6,21:30,37:52),3],
+#        col = sickcolors[timegroups],
+#        pch=20, cex=0.7)
+# plot "L" points w/ triangles
+pch3d(x=ydata3d[c(25,30,40,47,52),1], y=ydata3d[c(25,30,40,47,52),2], z=ydata3d[c(25,30,40,47,52),3],
+      # col = sickcolors[8],
+      col = "red",
+      pch=17, cex=0.8)
+
+## plot individually colored connecting lines
+# # gray for all control mice 
+# lines3d(x=ydata3d[53:59,1], y=ydata3d[53:59,2], z=ydata3d[53:59,3], col = "gray74", lwd=1) # CTL2689
+# lines3d(x=ydata3d[60:66,1], y=ydata3d[60:66,2], z=ydata3d[60:66,3], col = "gray74", lwd=1) # CTL2692
+# lines3d(x=ydata3d[67:73,1], y=ydata3d[67:73,2], z=ydata3d[67:73,3], col = "gray74", lwd=1) # CTL2700
+# lines3d(x=ydata3d[74:80,1], y=ydata3d[74:80,2], z=ydata3d[74:80,3], col = "gray74", lwd=1) # CTL2702
+# lines3d(x=ydata3d[81:87,1], y=ydata3d[81:87,2], z=ydata3d[81:87,3], col = "gray74", lwd=1) # CTL2705
+# lines3d(x=ydata3d[88:94,1], y=ydata3d[88:94,2], z=ydata3d[88:94,3], col = "gray74", lwd=1) # CTL2720
+# lines3d(x=ydata3d[95:101,1], y=ydata3d[95:101,2], z=ydata3d[95:101,3], col = "gray74", lwd=1) # CTL2683
+# # different shades of red and blue for all CM knock-in mice (red for sick, blue for not sick)
+# lines3d(x=ydata3d[1:6,1], y=ydata3d[1:6,2], z=ydata3d[1:6,3], col = "coral1", lwd=1) # CM2684 sick
+# lines3d(x=ydata3d[7:13,1], y=ydata3d[7:13,2], z=ydata3d[7:13,3], col = "lightskyblue", lwd=1) # CM2685 not sick
+# lines3d(x=ydata3d[14:20,1], y=ydata3d[14:20,2], z=ydata3d[14:20,3], col = "turquoise", lwd=1) # CM2686 not sick
+# lines3d(x=ydata3d[21:25,1], y=ydata3d[21:25,2], z=ydata3d[21:25,3], col = "lightpink", lwd=1) # CM2690 sick
+# lines3d(x=ydata3d[26:30,1], y=ydata3d[26:30,2], z=ydata3d[26:30,3], col = "salmon", lwd=1) # CM2708 sick
+# lines3d(x=ydata3d[31:36,1], y=ydata3d[31:36,2], z=ydata3d[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+# lines3d(x=ydata3d[37:40,1], y=ydata3d[37:40,2], z=ydata3d[37:40,3], col = "red", lwd=1) # CM2731 sick
+# lines3d(x=ydata3d[41:47,1], y=ydata3d[41:47,2], z=ydata3d[41:47,3], col = "red3", lwd=1) # CM2718 sick
+# lines3d(x=ydata3d[48:52,1], y=ydata3d[48:52,2], z=ydata3d[48:52,3], col = "red4", lwd=1) # CM2719 sick
+
+## plot individually colored connecting lines
+# black/red/blue
+lines3d(x=ydata3d[53:59,1], y=ydata3d[53:59,2], z=ydata3d[53:59,3], col = "black", lwd=1) # CTL2689
+lines3d(x=ydata3d[60:66,1], y=ydata3d[60:66,2], z=ydata3d[60:66,3], col = "black", lwd=1) # CTL2692
+lines3d(x=ydata3d[67:73,1], y=ydata3d[67:73,2], z=ydata3d[67:73,3], col = "black", lwd=1) # CTL2700
+lines3d(x=ydata3d[74:80,1], y=ydata3d[74:80,2], z=ydata3d[74:80,3], col = "black", lwd=1) # CTL2702
+lines3d(x=ydata3d[81:87,1], y=ydata3d[81:87,2], z=ydata3d[81:87,3], col = "black", lwd=1) # CTL2705
+lines3d(x=ydata3d[88:94,1], y=ydata3d[88:94,2], z=ydata3d[88:94,3], col = "black", lwd=1) # CTL2720
+lines3d(x=ydata3d[95:101,1], y=ydata3d[95:101,2], z=ydata3d[95:101,3], col = "black", lwd=1) # CTL2683
+lines3d(x=ydata3d[1:6,1], y=ydata3d[1:6,2], z=ydata3d[1:6,3], col = "red", lwd=1) # CM2684 sick
+lines3d(x=ydata3d[7:13,1], y=ydata3d[7:13,2], z=ydata3d[7:13,3], col = "blue", lwd=1) # CM2685 not sick
+lines3d(x=ydata3d[14:20,1], y=ydata3d[14:20,2], z=ydata3d[14:20,3], col = "blue", lwd=1) # CM2686 not sick
+lines3d(x=ydata3d[21:25,1], y=ydata3d[21:25,2], z=ydata3d[21:25,3], col = "red", lwd=1) # CM2690 sick
+lines3d(x=ydata3d[26:30,1], y=ydata3d[26:30,2], z=ydata3d[26:30,3], col = "red", lwd=1) # CM2708 sick
+lines3d(x=ydata3d[31:36,1], y=ydata3d[31:36,2], z=ydata3d[31:36,3], col = "blue", lwd=1) # CM2709 not sick
+lines3d(x=ydata3d[37:40,1], y=ydata3d[37:40,2], z=ydata3d[37:40,3], col = "red", lwd=1) # CM2731 sick
+lines3d(x=ydata3d[41:47,1], y=ydata3d[41:47,2], z=ydata3d[41:47,3], col = "red", lwd=1) # CM2718 sick
+lines3d(x=ydata3d[48:52,1], y=ydata3d[48:52,2], z=ydata3d[48:52,3], col = "red", lwd=1) # CM2719 sick
+
 rglwidget()
 ```
 
-
-2D t-SNE plot highlighting selected cluster
-
- 
-```{r tsne-select}
-clusterindex <- 10 # select index of the cluster you want to visualize
-color1 <- colors
-color1[-clusterindex] <- "black"
-```
-
-```{r tsne-plot2d-select}
-plot(x=ydata3d[,1], y=ydata3d[,2], 
-     col = color1[groupsf], 
-     pch=20,
-     main = paste("2D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)")) 
-legend("bottomleft", inset = c(0,0), 
-       legend = levels(groupsf), 
-       pch = 20, 
-       col = color1, 
-       ncol=3, cex=0.3) 
-```
-
-3D t-SNE plot highlighting selected cluster  
-```{r tsne-plot3d}
-plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
-       col = color1[groupsf],
-       pch=20,
-       main = paste("3D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)"))
-rglwidget()
-```

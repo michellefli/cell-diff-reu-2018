@@ -1,7 +1,7 @@
 ---
 title: 'Nestorowa Gene Expression Data: Dimension Reduction'
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "7/2/2018"
+date: "7/20/2018"
 output:
   html_document: default
 ---
@@ -17,7 +17,7 @@ r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```
 
 ```{r load-nestorowa, include=FALSE}
-## load .Rdata file into environment so you have all calculations done
+## load .Rdata file into environment so you have all calculations done (located in our Drive)
 ## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
 load("~/GitHub/cell-diff-reu-2018/nestorowa-rmd-data.RData")
 ```
@@ -25,12 +25,9 @@ load("~/GitHub/cell-diff-reu-2018/nestorowa-rmd-data.RData")
 
 Analyzing Nestorowa gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Nestorowa data comes as a dataframe of 1645 cells x 4290 genes.  
 
+Nestorowa examines differentiation of hematopoeitic stem and progenitor cells (HSPCs). They examine 1656 single HSPC transcriptomes using single-cell RNA sequencing and aim to better understand and visualize HSC-to-progenitor transitions.  
 
-## PCA (Handwritten)
-
-This is the handwritten version of PCA in R, I used SVD for everything (not eig).
-
-```{r pca-nestorowa, eval=FALSE, include=FALSE}
+```{r prepare-nestorowa, eval=FALSE, include=FALSE}
 ## read in data, convert to matrix
 rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
 cleandata <- na.omit(rawdata) # remove rows with NA
@@ -46,45 +43,61 @@ groups <- gsub(".*LT.*", "LT.HSC", groups)
 groups <- gsub(".*Prog.*", "PROG", groups)
 groupsf <- factor(groups)
 nclusters <- nlevels(groupsf) # number of groups to cluster
-colors <- rainbow(nclusters) # choose colors
+# colors <- topo.colors(nclusters) # choose colors
+colors <- c("limegreen", "dodgerblue", "gold")
+```
 
-## center data
-data <- t(data) # need transpose for PCA
+```{r heatmap-nestorowa, eval=FALSE, include=FALSE}
+hmap <- heatmap(data, Rowv=NA, Colv=NA)
+```
+
+
+## PCA (Handwritten)  
+
+This is the handwritten version of PCA in R, I used SVD for everything (not eig).  
+
+```{r pca-nestorowa, eval=FALSE, include=FALSE}
+## PCA DIMENSIONS:
+## cells = rows, genes = columns 
+## Nestorowa: use original data matrix, NO transpose
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=0)
+svd <- svd(M1centered, nu=3, nv=3) # only first 3 left/right singular vectors for efficiency
 U <- svd$u # dim: nrowx3
+V <- svd$v # dim: ncolx3
+# Note: U = M1centered %*% V %*% S^-1
 
 ## calculate scores
-scores <- t(M1centered) %*% U # columns of scores are the principal components, dim: ncolx3
+# weights <- t(M1centered) %*% U # dim: ncolx3
+scores <- M1centered %*% V # dim: nrowx3
 ```
 
-#### Plots of weights
-Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD.  
+#### Plots of scores
+Scores were calculated by: scores <- data %*% V. V are the right singular vectors from SVD whose columns contain the eigenvectors of the covariance matrix. Scores give the coordinates of the individuals on the principal components (coefficients of the linear combination of original variables for each principal component). 
 
-2D plot of weights  
-```{r pca-plot2dweights}
-plot(x=weights[,1], y=weights[,2], 
-     xlab="PC1 weights", ylab="PC2 weights", 
+2D plot of scores  
+```{r pca-plot2dscores}
+plot(x=scores[,1], y=scores[,2], 
+     xlab="PC1 scores", ylab="PC2 scores", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA Weights (Handwritten),", dataname))
+     main = "PCA Scores, Nestorowa")
 legend("topright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=1, cex=0.4)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
-3D plot of weights  
-```{r pca-plot3dweights}
-## plot weights 3d
-plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
-       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
+3D plot of scores  
+```{r pca-plot3dscores}
+## plot scores 3d
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA Weights (Handwritten),", dataname))
+       main = "PCA Scores, Nestorowa")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 
@@ -94,35 +107,34 @@ rglwidget()
 ```
 
 #### Plots of principal components
-2D plot of PCs (eigenvectors of actual covariance matrix)  
+2D plot of PCs (eigenvectors of covariance matrix)  
 ```{r pca-plot2dpcs}
 ## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
+plot(x=V[,1], y=V[,2], 
      xlab="PC1", ylab="PC2", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0), 
+     main = "Principal Components, Nestorowa")
+legend("topright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=1, 
-       cex=0.4)
+       ncol=1, cex=0.6, pt.cex=1)
 ```
 
 3D plot of PCs (eigenvectors of actual covariance matrix)  
 ```{r pca-plot3d-pcs}
 ## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
+plot3d(x=V[,1], y=V[,2], z=V[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
+       main = "Principal Components, Nestorowa")
 legend3d("bottomright", inset=c(0.1,0.1), 
          legend = levels(groupsf), 
          pch = 20, 
          col = colors, 
-         ncol=1, cex=1)
+         ncol=1, cex=1.5)
 rglwidget()
 ```
 
@@ -132,12 +144,13 @@ rglwidget()
 
 Diffusion mapping using destiny package.  
 ```{r diffmap-nestorowa, eval=FALSE, include=FALSE}
-## previously read in data, converted to matrix, transposed 
 ## convert to expression set
-## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Nestorowa needs transpose
+data <- t(data)
 dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
 
-## diffusion map (un-normalized data)
+## diffusion map
 dm <- DiffusionMap(dataES)
 
 ## sigmas
@@ -151,12 +164,12 @@ plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
      xlab="DC1", ylab="DC2",
      col = colors[groupsf],
      pch=20, 
-     main = paste("Diffusion Map (destiny) of", dataname))
+     main = "Diffusion Map, Nestorowa")
 legend("bottomleft", inset=c(0,0), 
        legend=levels(groupsf), 
        col=colors, 
        pch=20, 
-       ncol=1, cex=0.3) 
+       ncol=1, cex=0.6, pt.cex=1) 
 ```
 
 3D Diffusion Map  
@@ -166,7 +179,7 @@ plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
       xlab="DC1", ylab="DC2", zlab="DC3",
        col = colors[groupsf],
        pch=20, 
-       main = paste("Diffusion Map (destiny) of", dataname))
+       main = "Diffusion Map, Nestorowa")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 
@@ -188,33 +201,49 @@ t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
 
 ```{r tsne-nestorowa, eval=FALSE, include=FALSE}
 ## already read in data and converted to matrix
-# Note: can take very, very long with large datasets
 # t-SNE DIMENSIONS: rows=cells, columns=genes
-data <- t(data) # transpose back to original data
-
+# Nestorowa requires a transpose back to original data setup 
+data <- t(data) 
 ydata3d <- tsne(data, k=3, max_iter = 200)
 ```
 
-2D t-SNE plot  
-```{r tsne-plot2d}
+2D t-SNE plot (dimensions 1 vs. 2) 
+```{r tsne-plot2d-1v2}
 plot(x=ydata3d[,1], y=ydata3d[,2], 
+     xlab="", ylab="", 
      col = colors[groupsf], 
      pch=20,
-     main = paste("2D t-SNE Plot of", dataname)) 
+     main = "t-SNE, Nestorowa") 
 legend("topright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=1, cex=0.5) 
+       ncol=1, cex=0.6, pt.cex=1) 
 ```
+
+2D t-SNE plot (dimensions 2 vs. 3)  
+```{r tsne-plot2d-2v3}
+plot(x=ydata3d[,2], y=ydata3d[,3], 
+     xlab="", ylab="", 
+     col = colors[groupsf], 
+     pch=20,
+     main = "t-SNE, Nestorowa") 
+legend("topright", inset = c(0,0), 
+       legend = levels(groupsf), 
+       pch = 20, 
+       col = colors, 
+       ncol=1, cex=0.6, pt.cex=1) 
+```
+
 
 3D t-SNE plot  
 ```{r tsne-plot3d}
 plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3],  
+       xlab="", ylab="", zlab="",
        col=colors[groupsf], 
        pch=20,
-       main = paste("3D t-SNE Plot of", dataname))
-legend3d("topright", inset=c(0.1,0.1),
+       main = "t-SNE, Nestorowa")
+legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),  
          pch = 20, 
          col = colors, 

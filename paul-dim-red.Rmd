@@ -1,7 +1,7 @@
 ---
 title: "Paul Gene Expression Data: Dimension Reduction"
 author: "Michelle Li and Gianna Wu with Professor de Pillis and Dr. Park"
-date: "7/2/2018"
+date: "7/20/2018"
 output: html_document
 ---
 
@@ -16,7 +16,7 @@ r3dDefaults$windowRect <- c(0,0,1000,1000)
 ```
 
 ```{r load-paul, include=FALSE}
-## load .Rdata file into environment so you have all calculations done
+## load .Rdata file into environment so you have all calculations done (located in our Drive)
 ## if you have the .RData file to load, use eval=FALSE for pca, diffmap, tsne
 load("~/GitHub/cell-diff-reu-2018/paul-rmd-data.RData")
 ```
@@ -25,64 +25,67 @@ load("~/GitHub/cell-diff-reu-2018/paul-rmd-data.RData")
 
 Analyzing Paul gene expression data using the following dimension reduction techniques in R: PCA (handwritten version), diffusion mapping (destiny package), and t-SNE (tsne package). The original Paul data comes in as a matrix of 8716 genes x 2730 cells.  
 
-## PCA (Handwritten)
+Paul examines stem cell differentiation in the bone marrow. Using single-cell RNA sequencing they examine the heterogeneity of myeloid progenitor cells to better understand and define the differentiation of hematopoietic progenitors into distinct
+lineages. They identify 19 transcriptionally homogeneous subpopulations of cells, which we use for our coloring of plots.  
 
-```{r pca-paul, eval=FALSE, include=FALSE}
-## load data 
+```{r prepare-paul, eval=FALSE, include=FALSE}
+## read in data 
 load("~/GitHub/cell-diff-reu-2018/data/Paul_Cell_MARSseq_GSE72857.RData")
-dataname <- "Paul Gene Expression Data" # enter title of data
 
 ## create factor for grouping
 groupsf <- factor(cluster.id) # paul data
 nclusters <- nlevels(groupsf) # number of groups to cluster
-colors <- rainbow(nclusters) # choose colors
+colors <- topo.colors(nclusters) # choose colors
+```
 
-gclusters <- nlevels(info.genes)
-gcolors <- rainbow(gclusters)
+```{r heatmap-grover, eval=FALSE, include=FALSE}
+hmap <- heatmap(data, Rowv=NA, Colv=NA)
+```
 
-# IMPORTANT NOTE ON DIMENSIONS:
-# whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
-# e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
-# for Paul data: use regular data matrix (genes x cells)
+## PCA (Handwritten)
 
-## center data
+```{r pca-paul, eval=FALSE, include=FALSE}
+## PCA DIMENSIONS:
+## cells = rows, genes = columns 
+## Paul: use TRANSPOSE of data matrix (want cells x genes)
+data <- t(data)
 M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means from each column
 
 ## svd
-svd <- svd(M1centered, nu=3, nv=3)
+svd <- svd(M1centered, nu=3, nv=3) # only first 3 left/right singular vectors for efficiency
 U <- svd$u # dim: nrowx3
-V <- svd$v 
+V <- svd$v # dim: ncolx3
 # Note: U = M1centered %*% V %*% S^-1
 
-## calculate weights
-weights <- t(M1centered) %*% U # columns of weights are weights, dim: ncolx3
-scores <- M1centered %*% V # basically U 
+## calculate scores
+# weights <- t(M1centered) %*% U # dim: ncolx3
+scores <- M1centered %*% V # dim: nrowx3
 ```
 
-#### Plots of weights 
-Weights were calculated by doing: weights = t(M1centered) %*% U, where M1centered is the centered data and U contains the left singular vectors from SVD. 
+#### Plots of scores 
+Scores were calculated by: scores <- data %*% V. V are the right singular vectors from SVD whose columns contain the eigenvectors of the covariance matrix. Scores give the coordinates of the individuals on the principal components (coefficients of the linear combination of original variables for each principal component). 
 
-2D plot of weights   
-```{r pca-plot2dweights}
-plot(x=weights[,1], y=weights[,2], 
-     xlab="PC1 weights", ylab="PC2 weights", 
+2D plot of scores   
+```{r pca-plot2dscores}
+plot(x=scores[,1], y=scores[,2], 
+     xlab="PC1 scores", ylab="PC2 scores", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA Weights (Handwritten),", dataname))
+     main = "PCA Scores, Paul")
 legend("bottomright", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=3, cex=0.4)
+       ncol=3, cex=0.4, pt.cex=1)
 ```
 
-3D plot of weights 
-```{r pca-plot3dweights}
-plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
-       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
+3D plot of scores 
+```{r pca-plot3dscores}
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA Weights (Handwritten),", dataname))
+       main = "PCA Scores, Paul")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf), 
          pch = 20, 
@@ -93,29 +96,29 @@ rglwidget()
 
 #### Plots of principal components
 
-2D plot of PCs (eigenvectors of actual covariance matrix)  
+2D plot of PCs (eigenvectors of covariance matrix)  
 ```{r pca-plot2dpcs}
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
+## plot PCs 2d (eigenvectors of covariance matrix)
+plot(x=V[,1], y=V[,2], 
      xlab="PC1", ylab="PC2", 
      col = colors[groupsf], 
      pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("bottomleft", inset = c(0,0),
+     main = "Principal Components, Paul")
+legend("bottomright", inset = c(0,0),
        legend = levels(groupsf),
        pch = 20,
        col = colors,
-       ncol=3, cex=0.4)
+       ncol=3, cex=0.4, pt.cex=1)
 ```
 
-3D plot of PCs (eigenvectors of actual covariance matrix)  
+3D plot of PCs (eigenvectors of covariance matrix)  
 ```{r pca-plot3dpcs}
 ## plot PCs 3d
-plot3d(x=U[,1], y=U[,2], z=U[,3], 
+plot3d(x=V[,1], y=V[,2], z=V[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
        col = colors[groupsf], 
        pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
+       main = "Principal Components, Paul")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 
@@ -124,39 +127,19 @@ legend3d("bottomright", inset=c(0.1,0.1),
 rglwidget()
 ```
 
-
-
-2D plot of PCs (eigenvectors of actual covariance matrix)  
-```{r pca-plot2dpcs-gradient}
-geneexp1 <- factor(data[,1])
-geneexp300 <- factor(data[,300])
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=U[,1], y=U[,2], 
-     xlab="PC1", ylab="PC2", 
-     col = rainbow(nlevels(geneexp300))[geneexp300],
-     pch = 20, 
-     main = paste("PCA (Handwritten),", dataname))
-legend("bottomright", inset = c(0,0),
-       legend = levels(geneexp2),
-       pch = 20,
-       col = colors,
-       ncol=3, cex=0.4)
-```
-
-
 ----
 
 ## Diffusion Mapping (destiny)
 
 Diffusion mapping using destiny package.  
 ```{r diffmap-paul, eval=FALSE, include=FALSE}
-## previously read in data and converted to matrix 
 ## convert to expression set
-## NOTE ON EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
-## Paul does NOT need to transpose data
+## EXPRESSION SET DIMENSIONS: cells = columns ; genes = rows
+## Paul needs the original formatting (we just took a transpose, must transpose back)
+data <- t(data)
 dataES <- ExpressionSet(assayData=data) # you must include the 'assayData=' for this to come out correctly
 
-## diffusion map (un-normalized data)
+## diffusion map
 dm <- DiffusionMap(dataES)
 
 ## sigmas
@@ -170,12 +153,12 @@ plot(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2],
      xlab="DC1", ylab="DC2",
      col = colors[groupsf],
      pch=20, 
-     main = paste("Diffusion Map (destiny),", dataname))
+     main = "Diffusion Map, Paul")
 legend("bottomright", inset=c(0,0), 
        legend=levels(groupsf), 
        col=colors, 
        pch=20, 
-       ncol=3, cex=0.3) 
+       ncol=3, cex=0.4, pt.cex=1) 
 ```
 
 3D Diffusion Map  
@@ -185,7 +168,7 @@ plot3d(x=eigenvectors(dm)[,1], y=eigenvectors(dm)[,2], z=eigenvectors(dm)[,3],
        xlab="DC1", ylab="DC2", zlab="DC3",
        col = colors[groupsf],
        pch=20, 
-       main = paste("Diffusion Map (destiny) of", dataname))
+       main = "Diffusion Map, Paul")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),
          pch = 20, 
@@ -207,67 +190,38 @@ t-SNE using tsne package (from jdonaldson, linked on van der Maaten's website).
 
 ```{r tsne-paul, eval=FALSE, include=FALSE}
 ## already read in data and converted to matrix
-# Note: can take very, very long with large datasets, such as Paul
+# Note: can take very, very long with this dataset
 # t-SNE DIMENSIONS: rows=cells, columns=genes
 # Paul data needs transpose to have correct dimensions
-
-ydata1 <- tsne(t(data), k=3, max_iter = 200, perplexity = 50) # ydata = matrix(rnorm(k * n),n) 
+data <- t(data)
+ydata3d <- tsne(data, k=3, max_iter = 200) # ydata = matrix(rnorm(k * n),n) 
 ```
 
 2D t-SNE plot  
 ```{r tsne-plot2d}
 plot(x=ydata3d[,1], y=ydata3d[,2], 
+     xlab="", ylab="",
      col = colors[groupsf], 
      pch=20,
-     main = paste("2D t-SNE Plot of", dataname, "(tsne)")) 
+     main = "t-SNE, Paul") 
 legend("bottomleft", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=3, cex=0.3) 
+       ncol=3, cex=0.4, pt.cex=1) 
 ```
 
 3D t-SNE plot  
 ```{r tsne-plot3d}
 plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
+       xlab="", ylab="", zlab="",
        col=colors[groupsf], 
        pch=20,
-       main = paste("3D t-SNE Plot of", dataname, "(tsne)"))
+       main = "t-SNE, Paul")
 legend3d("bottomright", inset=c(0.1,0.1),
          legend = levels(groupsf),  
          pch = 20, 
          col = colors, 
          ncol=3, cex=1.5)
-rglwidget()
-```
-
-
-2D t-SNE plot highlighting selected cluster
-
- 
-```{r tsne-select}
-clusterindex <- 10 # select index of the cluster you want to visualize
-color1 <- colors
-color1[-clusterindex] <- "black"
-```
-
-```{r tsne-plot2d-select}
-plot(x=ydata3d[,1], y=ydata3d[,2], 
-     col = color1[groupsf], 
-     pch=20,
-     main = paste("2D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)")) 
-legend("bottomleft", inset = c(0,0), 
-       legend = levels(groupsf), 
-       pch = 20, 
-       col = color1, 
-       ncol=3, cex=0.3) 
-```
-
-3D t-SNE plot highlighting selected cluster  
-```{r tsne-plot3d}
-plot3d(x=ydata3d[,1], y=ydata3d[,2], z=ydata3d[,3], 
-       col = color1[groupsf],
-       pch=20,
-       main = paste("3D t-SNE Plot of Cluster", clusterindex, dataname, "(tsne)"))
 rglwidget()
 ```
