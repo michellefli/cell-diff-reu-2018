@@ -1,24 +1,22 @@
 # Michelle Li
 # pca
 
-# last updated: July 3, 2018
+# last updated: July 20, 2018
 # tried 2 PCA packages, working with Nestorowa and Paul data
 # added handwritten version
 
 library(rgl)
 
-
 #### PREPARING DATA ----------------------------------------------
 
 ## NOTES ON OUR DATA:
-## Nestorowa data: 1645 cells x 4290 genes (need transpose for PCA)
-## Paul data: 8716 genes x 2730 cells
-## Grover data: 46175 genes x 135 cells
-## Russ data: 12674 genes x 101 cells
+## Nestorowa data: 1645 cells x 4290 genes
+## Paul data: 8716 genes x 2730 cells (need transpose for PCA)
+## Grover data: 46175 genes x 135 cells (need transpose for PCA)
+## Rockne data: 12674 genes x 101 cells (need transpose for PCA)
 
-## IMPORTANT NOTE ON DIMENSIONS FOR YOUR DATA MATRIX:
-## whatever you want plotted in PCA, whether the cells or the genes, put that in the COLUMNS of your data matrix
-## e.g. to get PCA that plots for each CELL, make sure you have cells as columns, genes as rows
+## PCA DIMENSIONS:
+## cells = rows, genes = columns 
 
 ## read in data and convert to matrix (Nestorowa, Grover, non-.RData file)
 rawdata <- read.delim("~/GitHub/cell-diff-reu-2018/data/coordinates_gene_counts_flow_cytometry.txt", row.names=1)
@@ -41,16 +39,8 @@ dataname <- "Paul Data" # enter title of data
 # groups[grepl("Prog",groups)] <- "PROG" # same for prog
 # groupsf <- factor(groups)
 groupsf <- factor(cluster.id) # paul data
-
 nclusters <- nlevels(groupsf) # number of groups to cluster
 colors <- rainbow(nclusters) # choose colors
-
-
-## TOY DATA
-data <- matrix(c(1,2,3,2,4,6,4,8,12,3,6,9,5,10,15,6,12,18),
-               nrow=6, ncol=3) # rows>columns
-dataname <- "Toy Data"
-
 
 
 ################### Handwritten PCA ##########################
@@ -64,11 +54,12 @@ M1centered <- scale(data, center=TRUE, scale=FALSE) # subtracts column means fro
 
 #### EIG/SVD ------------------------------------------------
 
+## NOTE: Eig has not been looked at in a long time
+
 ## testing covariance
-C <- cov(M1centered)
-eigC <- eigen(C)
-
-
+# C <- cov(M1centered) # returns ncol x ncol
+# eigC <- eigen(C)
+# eigvectors <- eigC$vectors
 
 ## eig
 # C <- cov(M1centered) # will return a cov matrix, ncol x ncol
@@ -84,113 +75,131 @@ eigC <- eigen(C)
 # unclear on the exact relationship between U from eig and U from svd
 
 ## svd
-svd <- svd(M1centered)
-Usvd <- svd$u # dim: nrowx3
-Ssvd <- svd$d
-Vsvd <- svd$v # dim: ncolx3
+svd <- svd(M1centered, nu=3, nv=3) # only first 3 left/right singular vectors for efficiency
+U <- svd$u # dim: nrowx3
+V <- svd$v # dim: ncolx3
+## Note: U = data %*% V %*% S^-1
 
 ## Calculate PC scores
-weights <- t(M1centered) %*% Usvd # columns of scores are the principal components, dim: ncolx3
+# weights <- t(M1centered) %*% U # dim: ncolx3
+scores <- M1centered %*% V # dim: nrowx3
 
 
 #### PLOTTING -------------------------------------------------
 
-par(mar = c(5,5,5,5), xpd = "TRUE") # add extra space to margins for legend 
+# par(mar = c(5.1,4.1,4.1,8.1), xpd = "TRUE") # use if you need extra space in margins for legend 
 
-## plot weights 2d 
-plot(x=weights[,1], y=weights[,2], 
-     xlab="PC1 weights", ylab="PC2 weights", 
-     # col = colors[groupsf],
+## plot scores 2d 
+plot(x=scores[,1], y=scores[,2], 
+     xlab="PC1 scores", ylab="PC2 scores", 
+     col = colors[groupsf],
      pch=20, 
-     main = paste("PCA Weights (Handwritten),", dataname))
-# legend("bottomright", inset = c(0,0), 
-#        legend = levels(groupsf), 
-#        pch = 20, 
-#        col = colors, 
-#        ncol=3, cex=0.4)
+     main = paste("PCA Scores (Handwritten),", dataname))
+legend("bottomright", inset = c(0,0),
+       legend = levels(groupsf),
+       pch = 20,
+       col = colors,
+       ncol=3, cex=0.4, pt.cex=1)
 
-## plot weights 3d 
-plot3d(x=weights[,1], y=weights[,2], z=weights[,3], 
-       xlab="PC1 weights", ylab="PC2 weights", zlab="PC3 weights", 
-       # col = colors[groupsf], 
+## plot scores 3d 
+plot3d(x=scores[,1], y=scores[,2], z=scores[,3], 
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores", 
+       col = colors[groupsf],
        pch=20, 
-       main = paste("PCA Weights (Handwritten),", dataname))
-par3d(windowRect=c(0,0,1000,1000))
-# legend3d("bottomright", inset=c(0.2,0.2), 
-#          legend = levels(groupsf), 
-#          pch = 20, 
-#          col = colors, 
-#          ncol=3, cex=1)
-rglwidget()
+       main = paste("PCA Scores (Handwritten),", dataname))
+legend3d("bottomright", inset=c(0.2,0.2),
+         legend = levels(groupsf),
+         pch = 20,
+         col = colors,
+         ncol=3, cex=1)
 
-
-## plot PCs 2d (eigenvectors of original covariance matrix)
-plot(x=Usvd[,1], y=Usvd[,2], 
+## plot PCs 2d (eigenvectors of covariance matrix)
+plot(x=V[,1], y=V[,2], 
      xlab="PC1", ylab="PC2", 
-     # col = colors[groupsf], 
+     col = colors[groupsf],
      pch=20, 
-     main = paste("PCA (Handwritten),", dataname))
+     main = paste("Principal Components (Handwritten PCA),", dataname))
 legend("bottomleft", inset = c(0,0), 
        legend = levels(groupsf), 
        pch = 20, 
        col = colors, 
-       ncol=3, cex=0.4)
+       ncol=3, cex=0.4, pt.cex=1)
 
 ## plot PCs 3d
-plot3d(x=Usvd[,1], y=Usvd[,2], z=Usvd[,3], 
+plot3d(x=V[,1], y=V[,2], z=V[,3], 
        xlab="PC1", ylab="PC2", zlab="PC3", 
-       # col = colors[groupsf], 
+       col = colors[groupsf],
        pch=20, 
-       main = paste("PCA (Handwritten),", dataname))
-par3d(windowRect=c(0,0,1000,1000))
+       main = paste("Principal Components (Handwritten PCA),", dataname))
 legend3d("bottomright", inset=c(0.2,0.2),
          legend = levels(groupsf),
          pch = 20, 
          col = colors, 
          ncol=3, cex=1)
-rglwidget()
 
 
 ################### PCA Packages #######################
-## Note: I haven't looked at this in a long time, might not work/make sense anymore
 
 #### PCA with function prcomp, uses svd -----------------------
 
-## do pca
-pca1 <- prcomp(data, scale = TRUE)
-# pca1t <- prcomp(t(datamat), scale=TRUE)
-loadings1 <- pca1$rotation # columns are the eigenvectors ncol x ncol (# cells)
+## run pca using prcomp
+pca1 <- prcomp(data, center=TRUE, scale = TRUE)
+rotation1 <- pca1$rotation # columns are the eigenvectors ncol x ncol (# cells)
 x1 <- pca1$x # x = rotated data (centered and scaled if requested) %*% rotation matrix
-
-A <- loadings1 %*% t(x1)
-B <- x1 %*% loadings1
+## rotation1 is equivalent to V, x1 is equivalent to scores
 
 ## plot
 par(mar = c(5,5,5,5), xpd = "TRUE") # add extra space to margins for legend 
-plot(x=loadings1[,1], y=loadings1[,2], 
-     # col = colors[groupsf], 
-     pch=20, 
-     main = paste("PCA (prcomp), ", dataname))
 
-plot(x=x1[1,], y=x1[2,], 
-     # col = colors[groupsf], 
+## plot PCs (eigenvectors) 
+## 2d
+plot(x=rotation1[,1], y=rotation1[,2], 
+     xlab="PC1", ylab="PC2",
+     col = colors[groupsf],
+     pch=20, 
+     main = paste("Principal Components (prcomp), ", dataname))
+legend("bottomright", inset = c(0,0),
+       legend = levels(groupsf),
+       pch = 20,
+       col = colors,
+       ncol=1, cex=0.4, pt.cex=1)
+
+## 3d
+plot3d(x=rotation1[,1], y=rotation1[,2], z=rotation1[,3],
+     xlab="PC1", ylab="PC2", zlab="PC3",
+     col = colors[groupsf],
+     pch=20, 
+     main = paste("Principal Components (prcomp), ", dataname))
+legend3d("bottomright", inset = c(0,0),
+       legend = levels(groupfs),
+       pch = 20,
+       col = colors,
+       ncol=1, cex=1)
+
+## plot scores
+## 2d
+plot(x=x1[,1], y=x1[,2],
+     xlab="PC1 scores", ylab="PC2 scores",
+     col = colors[groupsf],
      pch=20, 
      main = paste("PCA (prcomp),", dataname))
+legend("bottomright", inset=c(0.2,0.2),
+         legend = levels(groupsf),
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=0.4, pt.cex=1)
 
-plot(x=A[,1], y=A[,2], 
-     # col = colors[groupsf], 
-     pch=20, 
-     main = paste("PCA (prcomp), ", dataname))
-
-plot(x=B[,1], y=B[,2], 
-     # col = colors[groupsf], 
-     pch=20, 
-     main = paste("PCA (prcomp), ", dataname))
-
-
-plot(x=loadings1[,1], y=loadings1[,2], col = colors[groupsf], pch=20, main = paste("PCA (prcomp), ", dataname))
-
-legend("topright", inset=c(0,0), legend=levels(groupsf), col=colors,pch=20, ncol=1, cex=0.5)
+## 3d
+plot3d(x=x1[,1], y=x1[,2], z=x1[,3],
+       xlab="PC1 scores", ylab="PC2 scores", zlab="PC3 scores",
+       col = colors[groupsf],
+       pch=20, 
+       main = paste("PCA (prcomp),", dataname))
+legend3d("bottomright", inset=c(0.2,0.2),
+         legend = levels(groupsf),
+         pch = 20, 
+         col = colors, 
+         ncol=3, cex=1)
 
 
 #### PCA with function PCA() from package "FactoMineR", uses eig -----------------------
@@ -198,20 +207,32 @@ legend("topright", inset=c(0,0), legend=levels(groupsf), col=colors,pch=20, ncol
 library(FactoMineR)
 
 # takes in a dataframe X with n rows (individuals) and p columns (numeric variables)
-data <- as.data.frame(t(data))
-pca2 <- PCA(data)
+data <- as.data.frame(data)
+pca2 <- PCA(data) # n rows (individuals), p columns (numeric variables)
 coord <- pca2$ind$coord
 
 ## plot 2d
-plot(pca2, choix="ind")
-plot(x=coord[,1], y=coord[,2], habillage="ind", 
-     # col.hab=colors[groupsf], 
-     label="none",
-     title=paste("2D PCA (FactoMineR), ", dataname))
-legend("topright", inset = c(0,0), legend = levels(groupsf), pch = 20, col = colors, ncol=3, cex=0.6) # add legend
+plot(x=coord[,1], y=coord[,2], 
+     xlab = "PC1", ylab = "PC2", 
+     col=colors[groupsf],
+     pch = 20,
+     main=paste("2D PCA (FactoMineR),", dataname))
+legend("topright", inset = c(0,0), 
+       legend = levels(groupsf), 
+       col = colors,
+       pch = 20, 
+       ncol=3, cex=0.6) # add legend
 
 ## plot 3d 
-plot3d(x=coord[,1], y=coord[,2], z=coord[,3], xlab="PC1", ylab="PC2", zlab="PC3", col=colors[groupsf], main = paste("3D PCA (FactoMineR), ", dataname))
-par3d(windowRect=c(0,0,1000,1000))
-legend3d("topright", legend = levels(groupsf), inset=c(0.1,0.1), pch = 20, col = colors, ncol=1, cex=1) # add legend
+plot3d(x=coord[,1], y=coord[,2], z=coord[,3],
+       xlab="PC1", ylab="PC2", zlab="PC3", 
+       col=colors[groupsf], 
+       main = paste("3D PCA (FactoMineR), ", dataname))
+legend3d("topright", inset=c(0.1,0.1), 
+         legend = levels(groupsf), 
+         col = colors,
+         pch = 20,
+         ncol=1, cex=1)
+
+
 
